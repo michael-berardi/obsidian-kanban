@@ -295,6 +295,17 @@ export function getItemClassModifiers(item: Item) {
     classModifiers.push('is-complete');
   }
 
+  // Priority modifiers - read from titleRaw [priority::value] pattern
+  const priorityMatch = item.data.titleRaw?.match(/\[priority::(high|low)\]/i);
+  if (priorityMatch) {
+    const priority = priorityMatch[1].toLowerCase();
+    if (priority === 'high') {
+      classModifiers.push('is-high-priority');
+    } else if (priority === 'low') {
+      classModifiers.push('is-low-priority');
+    }
+  }
+
   for (const tag of item.data.metadata.tags) {
     classModifiers.push(`has-tag-${tag.slice(1)}`);
   }

@@ -14,6 +14,7 @@ import { t } from 'src/lang/helpers';
 import { DndScope } from '../dnd/components/Scope';
 import { getBoardModifiers } from '../helpers/boardModifiers';
 import { frontmatterKey } from '../parsers/common';
+import { SidePane, SidePaneMode } from './SidePane';
 import { Icon } from './Icon/Icon';
 import { Lanes } from './Lane/Lane';
 import { LaneForm } from './Lane/LaneForm';
@@ -49,6 +50,7 @@ function getCSSClass(frontmatter: Record<string, any>): string[] {
 export const Kanban = ({ view, stateManager }: KanbanProps) => {
   const boardData = stateManager.useState();
   const isAnythingDragging = useIsAnythingDragging();
+  const selectedItem = stateManager.getSelectedItem();
 
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -163,6 +165,34 @@ export const Kanban = ({ view, stateManager }: KanbanProps) => {
     }
   }, [boardData?.data.archive.length, maxArchiveLength]);
 
+  // Custom Undo Listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+Z or Ctrl+Z (Undo)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        // Ignore if typing in an input, textarea, or content editable element
+        const activeTag = document.activeElement?.tagName;
+        const isContentEditable = document.activeElement?.getAttribute('contenteditable') === 'true';
+
+        if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || isContentEditable) {
+          return;
+        }
+
+        // Trigger restore if we have a buffered deletion
+        if (stateManager.lastDeletedBuffer) {
+          e.preventDefault();
+          e.stopPropagation();
+          stateManager.restoreLastDeleted();
+          // Force focus back to board
+          rootRef.current?.focus();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [stateManager]);
+
   const boardModifiers = useMemo(() => {
     return getBoardModifiers(view, stateManager);
   }, [stateManager, view]);
@@ -216,10 +246,12 @@ export const Kanban = ({ view, stateManager }: KanbanProps) => {
         <SearchContext.Provider value={searchValue}>
           <div
             ref={rootRef}
+            tabIndex={-1}
             className={classcat([
               baseClassName,
               {
                 'something-is-dragging': isAnythingDragging,
+                'has-pane-open': !!selectedItem || stateManager.getIsArchiveOpen(),
               },
               ...getCSSClass(boardData.data.frontmatter),
             ])}
@@ -288,6 +320,42 @@ export const Kanban = ({ view, stateManager }: KanbanProps) => {
                 </div>
               </ScrollContainer>
             )}
+            <SidePane
+              mode={
+                selectedItem ? 'detail' :
+                  stateManager.getIsDelegatedOpen() ? 'delegated' :
+                    stateManager.getIsDoneOpen() ? 'done' :
+                      stateManager.getIsArchiveOpen() ? 'archive' :
+                        stateManager.getIsRecurringOpen() ? 'recurring' :
+                          stateManager.getIsProposalsOpen() ? 'proposals' :
+                            stateManager.getIsWaitingOpen() ? 'waiting' : null
+              }
+              onClose={() => {
+                // Restore focus to the board to ensure Undo (Cmd+Z) works
+                rootRef.current?.focus();
+
+                if (selectedItem) {
+                  // Closing detail - check if we should return to a previous pane
+                  const returnTo = stateManager.previousPaneMode;
+                  stateManager.previousPaneMode = null; // Clear it
+                  stateManager.selectItem(null);
+
+                  // Reopen the pane we drilled down from
+                  if (returnTo === 'archive') stateManager.openArchive();
+                  else if (returnTo === 'done') stateManager.openDone();
+                  else if (returnTo === 'delegated') stateManager.openDelegated();
+                  else if (returnTo === 'recurring') stateManager.openRecurring();
+                  else if (returnTo === 'proposals') stateManager.openProposals();
+                  else if (returnTo === 'waiting') stateManager.openWaiting();
+                }
+                else if (stateManager.getIsDelegatedOpen()) stateManager.closeDelegated();
+                else if (stateManager.getIsDoneOpen()) stateManager.closeDone();
+                else if (stateManager.getIsArchiveOpen()) stateManager.closeArchive();
+                else if (stateManager.getIsRecurringOpen()) stateManager.closeRecurring();
+                else if (stateManager.getIsProposalsOpen()) stateManager.closeProposals();
+                else if (stateManager.getIsWaitingOpen()) stateManager.closeWaiting();
+              }}
+            />
           </div>
         </SearchContext.Provider>
       </KanbanContext.Provider>

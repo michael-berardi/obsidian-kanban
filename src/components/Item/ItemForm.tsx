@@ -77,7 +77,7 @@ export function ItemForm({ addItems, editState, setEditState, hideButton }: Item
           }
         }}
       >
-        <span className={c('item-button-plus')}>+</span> {t('Add a card')}
+        {t('Add a card')}
       </button>
     </div>
   );

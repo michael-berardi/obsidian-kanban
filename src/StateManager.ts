@@ -27,6 +27,26 @@ export class StateManager {
 
   parser: BaseFormat;
 
+  // v2 Selection state
+  selectedItemId: string | null = null;
+
+  // v2.1 Archive pane state
+  isArchiveOpen: boolean = false;
+
+  // v2.1 Done pane state
+  isDoneOpen: boolean = false;
+
+  // v2.1 Pane drill-down: track which pane to return to when closing detail
+  previousPaneMode: 'archive' | 'done' | 'delegated' | 'recurring' | 'proposals' | 'waiting' | null = null;
+
+  // v2.6 Custom Undo Buffer
+  lastDeletedBuffer: {
+    item: Item;
+    location:
+    | { type: 'lane'; laneIndex: number; itemIndex: number }
+    | { type: 'virtual'; listName: 'archive' | 'done' | 'delegated' | 'recurring' | 'proposals' | 'waiting'; itemIndex: number };
+  } | null = null;
+
   constructor(
     app: App,
     initialView: KanbanView,
@@ -310,6 +330,11 @@ export class StateManager {
       children: [],
       data: {
         archive: [],
+        done: [],
+        delegated: [],
+        recurring: [],
+        proposals: [],
+        waiting: [],
         settings: { [frontmatterKey]: 'board' },
         frontmatter: {},
         isSearching: false,
@@ -426,5 +451,292 @@ export class StateManager {
 
   updateItemContent(item: Item, content: string) {
     return this.parser.updateItemContent(item, content);
+  }
+
+  // v2 Selection methods
+  selectItem(itemId: string | null) {
+    this.selectedItemId = itemId;
+    // Close archive pane when selecting a card (mutual exclusion)
+    if (itemId !== null) {
+      this.isArchiveOpen = false;
+    }
+    // Trigger re-render by notifying state receivers
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  getSelectedItem(): Item | null {
+    if (!this.selectedItemId || !this.state) return null;
+
+    // Search visible lanes first
+    for (const lane of this.state.children) {
+      for (const item of lane.children) {
+        if (item.id === this.selectedItemId) {
+          return item;
+        }
+      }
+    }
+
+    // Search hidden pane arrays (archive, done, delegated, recurring, proposals, waiting)
+    for (const item of this.state.data.archive || []) {
+      if (item.id === this.selectedItemId) return item;
+    }
+    for (const item of this.state.data.done || []) {
+      if (item.id === this.selectedItemId) return item;
+    }
+    for (const item of this.state.data.delegated || []) {
+      if (item.id === this.selectedItemId) return item;
+    }
+    for (const item of this.state.data.recurring || []) {
+      if (item.id === this.selectedItemId) return item;
+    }
+    for (const item of this.state.data.proposals || []) {
+      if (item.id === this.selectedItemId) return item;
+    }
+    for (const item of this.state.data.waiting || []) {
+      if (item.id === this.selectedItemId) return item;
+    }
+
+    return null;
+  }
+
+  // v2.1 Archive pane methods
+  toggleArchive() {
+    this.isArchiveOpen = !this.isArchiveOpen;
+    // Close all other panes when opening archive
+    if (this.isArchiveOpen) {
+      this.selectedItemId = null;
+      this.isDoneOpen = false;
+      this.isDelegatedOpen = false;
+    }
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  openArchive() {
+    this.isArchiveOpen = true;
+    this.selectedItemId = null;
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  closeArchive() {
+    this.isArchiveOpen = false;
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  getIsArchiveOpen(): boolean {
+    return this.isArchiveOpen;
+  }
+
+  // v2.1 Done pane methods
+  toggleDone() {
+    this.isDoneOpen = !this.isDoneOpen;
+    // Close all other panes when opening done
+    if (this.isDoneOpen) {
+      this.selectedItemId = null;
+      this.isArchiveOpen = false;
+      this.isDelegatedOpen = false;
+    }
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  openDone() {
+    this.isDoneOpen = true;
+    this.selectedItemId = null;
+    this.isArchiveOpen = false;
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  closeDone() {
+    this.isDoneOpen = false;
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  getIsDoneOpen(): boolean {
+    return this.isDoneOpen;
+  }
+
+  // v2.1 Delegated pane methods
+  isDelegatedOpen: boolean = false;
+
+  toggleDelegated() {
+    this.isDelegatedOpen = !this.isDelegatedOpen;
+    // Close detail, archive, and done pane when opening delegated
+    if (this.isDelegatedOpen) {
+      this.selectedItemId = null;
+      this.isArchiveOpen = false;
+      this.isDoneOpen = false;
+    }
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  openDelegated() {
+    this.isDelegatedOpen = true;
+    this.selectedItemId = null;
+    this.isArchiveOpen = false;
+    this.isDoneOpen = false;
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  closeDelegated() {
+    this.isDelegatedOpen = false;
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  getIsDelegatedOpen(): boolean {
+    return this.isDelegatedOpen;
+  }
+
+  // v2.5 Recurring pane methods
+  isRecurringOpen: boolean = false;
+
+  toggleRecurring() {
+    this.isRecurringOpen = !this.isRecurringOpen;
+    if (this.isRecurringOpen) {
+      this.selectedItemId = null;
+      this.isArchiveOpen = false;
+      this.isDoneOpen = false;
+      this.isDelegatedOpen = false;
+      this.isProposalsOpen = false;
+      this.isWaitingOpen = false;
+    }
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  openRecurring() {
+    this.isRecurringOpen = true;
+    this.selectedItemId = null;
+    this.isArchiveOpen = false;
+    this.isDoneOpen = false;
+    this.isDelegatedOpen = false;
+    this.isProposalsOpen = false;
+    this.isWaitingOpen = false;
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  closeRecurring() {
+    this.isRecurringOpen = false;
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  getIsRecurringOpen(): boolean {
+    return this.isRecurringOpen;
+  }
+
+  // v2.5 Proposals pane methods
+  isProposalsOpen: boolean = false;
+
+  toggleProposals() {
+    this.isProposalsOpen = !this.isProposalsOpen;
+    if (this.isProposalsOpen) {
+      this.selectedItemId = null;
+      this.isArchiveOpen = false;
+      this.isDoneOpen = false;
+      this.isDelegatedOpen = false;
+      this.isRecurringOpen = false;
+      this.isWaitingOpen = false;
+    }
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  openProposals() {
+    this.isProposalsOpen = true;
+    this.selectedItemId = null;
+    this.isArchiveOpen = false;
+    this.isDoneOpen = false;
+    this.isDelegatedOpen = false;
+    this.isRecurringOpen = false;
+    this.isWaitingOpen = false;
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  closeProposals() {
+    this.isProposalsOpen = false;
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  getIsProposalsOpen(): boolean {
+    return this.isProposalsOpen;
+  }
+
+  // v2.5 Waiting/Blocked pane methods
+  isWaitingOpen: boolean = false;
+
+  toggleWaiting() {
+    this.isWaitingOpen = !this.isWaitingOpen;
+    if (this.isWaitingOpen) {
+      this.selectedItemId = null;
+      this.isArchiveOpen = false;
+      this.isDoneOpen = false;
+      this.isDelegatedOpen = false;
+      this.isRecurringOpen = false;
+      this.isProposalsOpen = false;
+    }
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  openWaiting() {
+    this.isWaitingOpen = true;
+    this.selectedItemId = null;
+    this.isArchiveOpen = false;
+    this.isDoneOpen = false;
+    this.isDelegatedOpen = false;
+    this.isRecurringOpen = false;
+    this.isProposalsOpen = false;
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  closeWaiting() {
+    this.isWaitingOpen = false;
+    this.stateReceivers.forEach((receiver) => receiver({ ...this.state }));
+  }
+
+  getIsWaitingOpen(): boolean {
+    return this.isWaitingOpen;
+  }
+
+  // Undo Buffer Methods
+  saveDeletedItem(
+    item: Item,
+    location: {
+      type: 'lane';
+      laneIndex: number;
+      itemIndex: number;
+    } | {
+      type: 'virtual';
+      listName: 'archive' | 'done' | 'delegated' | 'recurring' | 'proposals' | 'waiting';
+      itemIndex: number;
+    }
+  ) {
+    this.lastDeletedBuffer = { item, location };
+  }
+
+  restoreLastDeleted() {
+    if (!this.lastDeletedBuffer) return;
+
+    const { item, location } = this.lastDeletedBuffer;
+
+    this.setState((board) => {
+      if (location.type === 'lane') {
+        const lane = board.children[location.laneIndex];
+        // Safety check if lane exists
+        if (!lane) return board;
+
+        return update(board, {
+          children: {
+            [location.laneIndex]: {
+              children: { $splice: [[location.itemIndex, 0, item]] },
+            },
+          },
+        });
+      } else {
+        // Virtual lane
+        return update(board, {
+          data: {
+            [location.listName]: { $splice: [[location.itemIndex, 0, item]] },
+          },
+        });
+      }
+    });
+
+    this.lastDeletedBuffer = null;
   }
 }

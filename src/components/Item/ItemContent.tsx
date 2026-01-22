@@ -161,9 +161,8 @@ export function Tags({
                 .instance.openGlobalSearch(`tag:${tag}`);
             }}
             key={i}
-            className={`tag ${c('item-tag')} ${
-              searchQuery && tag.toLocaleLowerCase().contains(searchQuery) ? 'is-search-match' : ''
-            }`}
+            className={`tag ${c('item-tag')} ${searchQuery && tag.toLocaleLowerCase().contains(searchQuery) ? 'is-search-match' : ''
+              }`}
             style={
               tagColor && {
                 '--tag-color': tagColor.color,
@@ -254,6 +253,18 @@ export const ItemContent = memo(function ItemContent({
     [path, boardModifiers, stateManager, item]
   );
 
+  // Strip inline fields from titleRaw for edit display
+  const getEditableTitle = useCallback((raw: string) => {
+    return raw.replace(/\[[\w-]+::[^\]]*\]/g, '').trim();
+  }, []);
+
+  // Restore inline fields (notes, priority, etc.) when saving
+  const restoreMetadata = useCallback((newTitle: string, originalRaw: string) => {
+    const inlineFields = originalRaw.match(/\[[\w-]+::[^\]]*\]/g) || [];
+    if (inlineFields.length === 0) return newTitle;
+    return newTitle + ' ' + inlineFields.join(' ');
+  }, []);
+
   if (!isStatic && isEditing(editState)) {
     return (
       <div className={c('item-input-wrapper')}>
@@ -263,10 +274,14 @@ export const ItemContent = memo(function ItemContent({
           onEnter={onEnter}
           onEscape={onEscape}
           onSubmit={onSubmit}
-          value={item.data.titleRaw}
+          value={getEditableTitle(item.data.titleRaw)}
           onChange={(update) => {
             if (update.docChanged) {
-              titleRef.current = update.state.doc.toString().trim();
+              // Restore metadata when saving
+              titleRef.current = restoreMetadata(
+                update.state.doc.toString().trim(),
+                item.data.titleRaw
+              );
             }
           }}
         />

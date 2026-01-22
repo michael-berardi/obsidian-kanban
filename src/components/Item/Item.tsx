@@ -1,4 +1,5 @@
 import classcat from 'classcat';
+import { Platform } from 'obsidian';
 import {
   JSX,
   memo,
@@ -48,6 +49,7 @@ const ItemInner = memo(function ItemInner({
 }: ItemInnerProps) {
   const { stateManager, boardModifiers } = useContext(KanbanContext);
   const [editState, setEditState] = useState<EditState>(EditingState.cancel);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   const dndManager = useContext(DndManagerContext);
 
@@ -68,6 +70,27 @@ const ItemInner = memo(function ItemInner({
     }
   }, [item.data.forceEditMode]);
 
+  // Click-outside handler to exit edit mode
+  useEffect(() => {
+    if (!isEditing(editState)) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setEditState(EditingState.complete);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [editState]);
+
+  // Exit edit mode when side pane opens
+  useEffect(() => {
+    if (stateManager.selectedItemId && isEditing(editState)) {
+      setEditState(EditingState.complete);
+    }
+  }, [stateManager.selectedItemId, editState]);
+
   const path = useNestedEntityPath();
 
   const showItemMenu = useItemMenu({
@@ -78,23 +101,35 @@ const ItemInner = memo(function ItemInner({
     path,
   });
 
-  const onContextMenu: JSX.MouseEventHandler<HTMLDivElement> = useCallback(
+  // Single click: Always open full-screen SidePane (Detail View)
+  // Inline edit is now accessed via the context menu or specific actions only
+  const onSingleClick: JSX.MouseEventHandler<HTMLDivElement> = useCallback(
     (e) => {
       if (isEditing(editState)) return;
+      const target = e.target as HTMLElement;
       if (
-        e.targetNode.instanceOf(HTMLAnchorElement) &&
-        (e.targetNode.hasClass('internal-link') || e.targetNode.hasClass('external-link'))
+        target.closest('a') ||
+        target.closest('button') ||
+        target.closest('input') ||
+        target.closest('textarea')
       ) {
         return;
       }
-      showItemMenu(e);
+
+      // Always open detail pane
+      stateManager.selectItem(item.id);
     },
-    [showItemMenu, editState]
+    [editState, stateManager, item.id]
   );
 
-  const onDoubleClick: JSX.MouseEventHandler<HTMLDivElement> = useCallback(
-    (e) => setEditState({ x: e.clientX, y: e.clientY }),
-    [setEditState]
+  const onContextMenu: JSX.MouseEventHandler<HTMLDivElement> = useCallback(
+    (e) => {
+      e.preventDefault();
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      showItemMenu(e);
+    },
+    [showItemMenu]
   );
 
   const ignoreAttr = useMemo(() => {
@@ -109,8 +144,8 @@ const ItemInner = memo(function ItemInner({
 
   return (
     <div
-      // eslint-disable-next-line react/no-unknown-property
-      onDblClick={onDoubleClick}
+      ref={wrapperRef}
+      onClick={onSingleClick}
       onContextMenu={onContextMenu}
       className={c('item-content-wrapper')}
       {...ignoreAttr}
@@ -141,6 +176,7 @@ export const DraggableItem = memo(function DraggableItem(props: DraggableItemPro
   const elementRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const search = useContext(SearchContext);
+  const { stateManager } = useContext(KanbanContext);
 
   const { itemIndex, ...innerProps } = props;
 
@@ -148,6 +184,7 @@ export const DraggableItem = memo(function DraggableItem(props: DraggableItemPro
 
   const isMatch = search?.query ? innerProps.item.data.titleSearch.includes(search.query) : false;
   const classModifiers: string[] = getItemClassModifiers(innerProps.item);
+  const isSelected = stateManager.selectedItemId === props.item.id;
 
   return (
     <div
@@ -157,7 +194,10 @@ export const DraggableItem = memo(function DraggableItem(props: DraggableItemPro
       }}
       className={c('item-wrapper')}
     >
-      <div ref={elementRef} className={classcat([c('item'), ...classModifiers])}>
+      <div
+        ref={elementRef}
+        className={classcat([c('item'), ...classModifiers, { 'is-selected': isSelected }])}
+      >
         {props.isStatic ? (
           <ItemInner
             {...innerProps}

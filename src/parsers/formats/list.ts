@@ -90,7 +90,7 @@ export function listItemToItemData(stateManager: StateManager, md: string, item:
   );
 
   const itemData: ItemData = {
-    titleRaw: removeBlockId(dedentNewLines(replaceBrs(itemContent))),
+    titleRaw: removeBlockId(dedentNewLines(replaceBrs(itemContent))).replace(/\*+$/, '').trim(),
     blockId: undefined,
     title: '',
     titleSearch,
@@ -222,19 +222,52 @@ export function listItemToItemData(stateManager: StateManager, md: string, item:
     }
   }
 
+  // Always strip ALL inline fields from display (keep metadata but hide text)
+  // Pattern: [anything::anything] - covers priority, notes, status, etc.
+  itemData.title = itemData.title.replace(/\[[\w-]+::[^\]]*\]/g, '').trim();
+
+  // Strip trailing asterisks
+  itemData.title = itemData.title.replace(/\*+$/, '').trim();
+
   itemData.metadata.tags?.sort(defaultSort);
 
   return itemData;
 }
 
 function isArchiveLane(child: Content, children: Content[], currentIndex: number) {
-  if (child.type !== 'heading' || toString(child, { includeImageAlt: false }) !== t('Archive')) {
-    return false;
-  }
+  if (child.type !== 'heading') return false;
+  const title = toString(child, { includeImageAlt: false });
+  return title === t('Archive') || title === 'Archive';
+}
 
-  const prev = getPrevSibling(children, currentIndex);
+function isDoneLane(child: Content) {
+  if (child.type !== 'heading') return false;
+  const title = toString(child, { includeImageAlt: false });
+  return title === t('Done') || title === 'Done';
+}
 
-  return prev && prev.type === 'thematicBreak';
+function isDelegatedLane(child: Content) {
+  if (child.type !== 'heading') return false;
+  const title = toString(child, { includeImageAlt: false });
+  return title === 'Delegated';  // No t() wrapper - just check for "Delegated"
+}
+
+function isRecurringLane(child: Content) {
+  if (child.type !== 'heading') return false;
+  const title = toString(child, { includeImageAlt: false });
+  return title === 'Recurring';
+}
+
+function isProposalsLane(child: Content) {
+  if (child.type !== 'heading') return false;
+  const title = toString(child, { includeImageAlt: false });
+  return title === 'Proposals' || title === 'Pending Proposals';
+}
+
+function isWaitingLane(child: Content) {
+  if (child.type !== 'heading') return false;
+  const title = toString(child, { includeImageAlt: false });
+  return title === 'Waiting' || title === 'Waiting / Blocked' || title === 'Blocked';
 }
 
 export function astToUnhydratedBoard(
@@ -246,9 +279,19 @@ export function astToUnhydratedBoard(
 ): Board {
   const lanes: Lane[] = [];
   const archive: Item[] = [];
+  const done: Item[] = [];
+  const delegated: Item[] = [];
+  const recurring: Item[] = [];
+  const proposals: Item[] = [];
+  const waiting: Item[] = [];
   root.children.forEach((child, index) => {
     if (child.type === 'heading') {
       const isArchive = isArchiveLane(child, root.children, index);
+      const isDone = isDoneLane(child);
+      const isDelegated = isDelegatedLane(child);
+      const isRecurring = isRecurringLane(child);
+      const isProposals = isProposalsLane(child);
+      const isWaiting = isWaitingLane(child);
       const headingBoundary = getNodeContentBoundary(child as Parent);
       const title = getStringFromBoundary(md, headingBoundary);
 
@@ -273,6 +316,7 @@ export function astToUnhydratedBoard(
         return true;
       });
 
+      // Parse Archive lane into archive array (hidden from board)
       if (isArchive && list) {
         archive.push(
           ...(list as List).children.map((listItem) => {
@@ -283,7 +327,106 @@ export function astToUnhydratedBoard(
             };
           })
         );
+        return;
+      }
 
+      // Parse Done lane into done array (hidden from board)
+      if (isDone && list) {
+        done.push(
+          ...(list as List).children.map((listItem) => {
+            return {
+              ...ItemTemplate,
+              id: generateInstanceId(),
+              data: listItemToItemData(stateManager, md, listItem),
+            };
+          })
+        );
+        return;
+      }
+
+      // Skip Done lane even if empty (always hidden from board)
+      if (isDone) {
+        return;
+      }
+
+      // Skip Archive lane even if empty (always hidden from board)
+      if (isArchive) {
+        return;
+      }
+
+      // Parse Delegated lane into delegated array (hidden from board)
+      if (isDelegated && list) {
+        delegated.push(
+          ...(list as List).children.map((listItem) => {
+            return {
+              ...ItemTemplate,
+              id: generateInstanceId(),
+              data: listItemToItemData(stateManager, md, listItem),
+            };
+          })
+        );
+        return;
+      }
+
+      // Skip Delegated lane even if empty (always hidden from board)
+      if (isDelegated) {
+        return;
+      }
+
+      // Parse Recurring lane into recurring array (hidden from board)
+      if (isRecurring && list) {
+        recurring.push(
+          ...(list as List).children.map((listItem) => {
+            return {
+              ...ItemTemplate,
+              id: generateInstanceId(),
+              data: listItemToItemData(stateManager, md, listItem),
+            };
+          })
+        );
+        return;
+      }
+
+      // Skip Recurring lane even if empty (always hidden from board)
+      if (isRecurring) {
+        return;
+      }
+
+      // Parse Proposals lane into proposals array (hidden from board)
+      if (isProposals && list) {
+        proposals.push(
+          ...(list as List).children.map((listItem) => {
+            return {
+              ...ItemTemplate,
+              id: generateInstanceId(),
+              data: listItemToItemData(stateManager, md, listItem),
+            };
+          })
+        );
+        return;
+      }
+
+      // Skip Proposals lane even if empty (always hidden from board)
+      if (isProposals) {
+        return;
+      }
+
+      // Parse Waiting lane into waiting array (hidden from board)
+      if (isWaiting && list) {
+        waiting.push(
+          ...(list as List).children.map((listItem) => {
+            return {
+              ...ItemTemplate,
+              id: generateInstanceId(),
+              data: listItemToItemData(stateManager, md, listItem),
+            };
+          })
+        );
+        return;
+      }
+
+      // Skip Waiting lane even if empty (always hidden from board)
+      if (isWaiting) {
         return;
       }
 
@@ -326,6 +469,11 @@ export function astToUnhydratedBoard(
       settings,
       frontmatter,
       archive,
+      done,
+      delegated,
+      recurring,
+      proposals,
+      waiting,
       isSearching: false,
       errors: [],
     },
@@ -440,6 +588,76 @@ function archiveToMd(archive: Item[]) {
   return '';
 }
 
+function doneToMd(done: Item[]) {
+  if (done.length) {
+    const lines: string[] = ['', `## ${t('Done')}`, ''];
+
+    done.forEach((item) => {
+      lines.push(itemToMd(item));
+    });
+
+    return lines.join('\n');
+  }
+
+  return '';
+}
+
+function delegatedToMd(delegated: Item[]) {
+  if (delegated.length) {
+    const lines: string[] = ['', `## Delegated`, ''];
+
+    delegated.forEach((item) => {
+      lines.push(itemToMd(item));
+    });
+
+    return lines.join('\n');
+  }
+
+  return '';
+}
+
+function recurringToMd(recurring: Item[]) {
+  if (recurring.length) {
+    const lines: string[] = ['', `## Recurring`, ''];
+
+    recurring.forEach((item) => {
+      lines.push(itemToMd(item));
+    });
+
+    return lines.join('\n');
+  }
+
+  return '';
+}
+
+function proposalsToMd(proposals: Item[]) {
+  if (proposals.length) {
+    const lines: string[] = ['', `## Proposals`, ''];
+
+    proposals.forEach((item) => {
+      lines.push(itemToMd(item));
+    });
+
+    return lines.join('\n');
+  }
+
+  return '';
+}
+
+function waitingToMd(waiting: Item[]) {
+  if (waiting.length) {
+    const lines: string[] = ['', `## Waiting / Blocked`, ''];
+
+    waiting.forEach((item) => {
+      lines.push(itemToMd(item));
+    });
+
+    return lines.join('\n');
+  }
+
+  return '';
+}
+
 export function boardToMd(board: Board) {
   const lanes = board.children.reduce((md, lane) => {
     return md + laneToMd(lane);
@@ -447,5 +665,6 @@ export function boardToMd(board: Board) {
 
   const frontmatter = ['---', '', stringifyYaml(board.data.frontmatter), '---', '', ''].join('\n');
 
-  return frontmatter + lanes + archiveToMd(board.data.archive) + settingsToCodeblock(board);
+  return frontmatter + lanes + recurringToMd(board.data.recurring) + proposalsToMd(board.data.proposals) + waitingToMd(board.data.waiting) + delegatedToMd(board.data.delegated) + doneToMd(board.data.done) + archiveToMd(board.data.archive) + settingsToCodeblock(board);
 }
+

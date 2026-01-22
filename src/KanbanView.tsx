@@ -318,18 +318,66 @@ export class KanbanView extends TextFileView implements HoverParent {
       super.onPaneMenu(menu, source);
       return;
     }
-    // Add a menu item to force the board to markdown view
+
+    const stateManager = this.plugin.stateManagers.get(this.file);
+
+    // Primary actions: Hidden lane access (mobile-first)
     menu
       .addItem((item) => {
         item
-          .setTitle(t('Open as markdown'))
+          .setTitle('Delegated')
+          .setIcon('lucide-send')
+          .setSection('pane')
+          .onClick(() => {
+            stateManager.toggleDelegated();
+          });
+      })
+      .addItem((item) => {
+        item
+          .setTitle(t('Done'))
+          .setIcon('lucide-check-circle')
+          .setSection('pane')
+          .onClick(() => {
+            stateManager.toggleDone();
+          });
+      })
+      .addItem((item) => {
+        item
+          .setTitle(t('Archive'))
+          .setIcon('lucide-archive')
+          .setSection('pane')
+          .onClick(() => {
+            stateManager.toggleArchive();
+          });
+      })
+      .addItem((item) => {
+        item
+          .setTitle('Recurring')
+          .setIcon('lucide-repeat')
+          .setSection('pane')
+          .onClick(() => {
+            stateManager.toggleRecurring();
+          });
+      })
+      .addItem((item) => {
+        item
+          .setTitle('Pending Proposals')
           .setIcon('lucide-file-text')
           .setSection('pane')
           .onClick(() => {
-            this.plugin.kanbanFileModes[(this.leaf as any).id || this.file.path] = 'markdown';
-            this.plugin.setMarkdownView(this.leaf);
+            stateManager.toggleProposals();
           });
       })
+      .addItem((item) => {
+        item
+          .setTitle('Waiting / Blocked')
+          .setIcon('lucide-pause-circle')
+          .setSection('pane')
+          .onClick(() => {
+            stateManager.toggleWaiting();
+          });
+      })
+      .addSeparator()
       .addItem((item) => {
         item
           .setTitle(t('Open board settings'))
@@ -337,16 +385,6 @@ export class KanbanView extends TextFileView implements HoverParent {
           .setSection('pane')
           .onClick(() => {
             this.getBoardSettings();
-          });
-      })
-      .addItem((item) => {
-        item
-          .setTitle(t('Archive completed cards'))
-          .setIcon('lucide-archive')
-          .setSection('pane')
-          .onClick(() => {
-            const stateManager = this.plugin.stateManagers.get(this.file);
-            stateManager.archiveCompletedCards();
           });
       });
 
@@ -427,33 +465,47 @@ export class KanbanView extends TextFileView implements HoverParent {
       delete this.actionButtons['show-search'];
     }
 
-    if (
-      stateManager.getSetting('show-view-as-markdown') &&
-      !this.actionButtons['show-view-as-markdown']
-    ) {
-      this.actionButtons['show-view-as-markdown'] = this.addAction(
-        'lucide-file-text',
-        t('Open as markdown'),
+    if (stateManager.getSetting('show-archive-all') && !this.actionButtons['show-delegated']) {
+      this.actionButtons['show-delegated'] = this.addAction(
+        'lucide-send',
+        'Delegated',
         () => {
-          this.plugin.kanbanFileModes[(this.leaf as any).id || this.file.path] = 'markdown';
-          this.plugin.setMarkdownView(this.leaf);
+          const stateManager = this.plugin.stateManagers.get(this.file);
+          stateManager.toggleDelegated();
         }
       );
     } else if (
-      !stateManager.getSetting('show-view-as-markdown') &&
-      this.actionButtons['show-view-as-markdown']
+      !stateManager.getSetting('show-archive-all') &&
+      this.actionButtons['show-delegated']
     ) {
-      this.actionButtons['show-view-as-markdown'].remove();
-      delete this.actionButtons['show-view-as-markdown'];
+      this.actionButtons['show-delegated'].remove();
+      delete this.actionButtons['show-delegated'];
+    }
+
+    if (stateManager.getSetting('show-archive-all') && !this.actionButtons['show-done']) {
+      this.actionButtons['show-done'] = this.addAction(
+        'lucide-check-circle',
+        t('Done'),
+        () => {
+          const stateManager = this.plugin.stateManagers.get(this.file);
+          stateManager.toggleDone();
+        }
+      );
+    } else if (
+      !stateManager.getSetting('show-archive-all') &&
+      this.actionButtons['show-done']
+    ) {
+      this.actionButtons['show-done'].remove();
+      delete this.actionButtons['show-done'];
     }
 
     if (stateManager.getSetting('show-archive-all') && !this.actionButtons['show-archive-all']) {
       this.actionButtons['show-archive-all'] = this.addAction(
         'lucide-archive',
-        t('Archive completed cards'),
+        t('Archive'),
         () => {
           const stateManager = this.plugin.stateManagers.get(this.file);
-          stateManager.archiveCompletedCards();
+          stateManager.toggleArchive();
         }
       );
     } else if (
@@ -464,17 +516,58 @@ export class KanbanView extends TextFileView implements HoverParent {
       delete this.actionButtons['show-archive-all'];
     }
 
-    if (stateManager.getSetting('show-add-list') && !this.actionButtons['show-add-list']) {
-      const btn = this.addAction('lucide-plus-circle', t('Add a list'), () => {
-        this.emitter.emit('showLaneForm', undefined);
-      });
+    // Header button: Recurring
+    if (stateManager.getSetting('show-archive-all') && !this.actionButtons['show-recurring']) {
+      this.actionButtons['show-recurring'] = this.addAction(
+        'lucide-repeat',
+        'Recurring',
+        () => {
+          const stateManager = this.plugin.stateManagers.get(this.file);
+          stateManager.toggleRecurring();
+        }
+      );
+    } else if (
+      !stateManager.getSetting('show-archive-all') &&
+      this.actionButtons['show-recurring']
+    ) {
+      this.actionButtons['show-recurring'].remove();
+      delete this.actionButtons['show-recurring'];
+    }
 
-      btn.addClass(c('ignore-click-outside'));
+    // Header button: Pending Proposals
+    if (stateManager.getSetting('show-archive-all') && !this.actionButtons['show-proposals']) {
+      this.actionButtons['show-proposals'] = this.addAction(
+        'lucide-file-text',
+        'Pending Proposals',
+        () => {
+          const stateManager = this.plugin.stateManagers.get(this.file);
+          stateManager.toggleProposals();
+        }
+      );
+    } else if (
+      !stateManager.getSetting('show-archive-all') &&
+      this.actionButtons['show-proposals']
+    ) {
+      this.actionButtons['show-proposals'].remove();
+      delete this.actionButtons['show-proposals'];
+    }
 
-      this.actionButtons['show-add-list'] = btn;
-    } else if (!stateManager.getSetting('show-add-list') && this.actionButtons['show-add-list']) {
-      this.actionButtons['show-add-list'].remove();
-      delete this.actionButtons['show-add-list'];
+    // Header button: Waiting / Blocked
+    if (stateManager.getSetting('show-archive-all') && !this.actionButtons['show-waiting']) {
+      this.actionButtons['show-waiting'] = this.addAction(
+        'lucide-pause-circle',
+        'Waiting / Blocked',
+        () => {
+          const stateManager = this.plugin.stateManagers.get(this.file);
+          stateManager.toggleWaiting();
+        }
+      );
+    } else if (
+      !stateManager.getSetting('show-archive-all') &&
+      this.actionButtons['show-waiting']
+    ) {
+      this.actionButtons['show-waiting'].remove();
+      delete this.actionButtons['show-waiting'];
     }
   };
 

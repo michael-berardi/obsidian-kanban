@@ -22,6 +22,11 @@ export function preprocessTitle(stateManager: StateManager, title: string) {
 
   const { app } = stateManager;
 
+  // Strip inline fields that shouldn't appear in display title
+  // [notes::...], [priority::...], and other custom fields
+  title = title.replace(/\[notes::[^\]]*\]/gi, '').trim();
+  title = title.replace(/\[priority::(standard|high|low)\]/gi, '').trim();
+
   let date: moment.Moment;
   let dateColor: DateColor;
   const getWrapperStyles = (baseClass: string) => {

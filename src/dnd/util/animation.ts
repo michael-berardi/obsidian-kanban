@@ -38,8 +38,10 @@ export function rafThrottle<T extends any[]>(
 }
 
 export const curves = {
-  outOfTheWay: 'cubic-bezier(0.2, 0, 0, 1)',
-  drop: 'cubic-bezier(.2,1,.1,1)',
+  // Apple-caliber spring-like ease with subtle deceleration
+  outOfTheWay: 'cubic-bezier(0.32, 0.72, 0, 1)',
+  // Smooth settle with slight overshoot feel
+  drop: 'cubic-bezier(0.22, 1, 0.36, 1)',
 };
 
 export const combine = {
@@ -55,9 +57,9 @@ export const combine = {
 };
 
 export const timings = {
-  outOfTheWay: 200,
-  minDropTime: 330,
-  maxDropTime: 550,
+  outOfTheWay: 180, // Apple: snappier shift
+  minDropTime: 250, // Apple: faster short drops
+  maxDropTime: 380, // Apple: faster long drops
 };
 
 const outOfTheWayTiming: string = `${timings.outOfTheWay}ms ${curves.outOfTheWay}`;

@@ -6,13 +6,89 @@
     padding: 0;
   }
 
-  > .view-header {
+  >.view-header {
     display: flex !important;
   }
 }
 
 .kanban-plugin {
-  --lane-width: 272px;
+  /* Spatial authority: wider lanes for text breathing room */
+  --lane-width: 320px;
+}
+
+/* =========================================
+   LOCKED LANES - Static Configuration
+   =========================================
+   Lanes are fixed: non-editable, non-movable, non-toggleable.
+   Update lane structure via markdown file directly.
+   ========================================= */
+
+/* Hide lane drag grip */
+.kanban-plugin__lane-grip {
+  display: none !important;
+}
+
+/* Hide lane collapse toggle (except To-Do which is first lane) */
+.kanban-plugin__lane-collapse {
+  display: none !important;
+}
+
+/* Show collapse toggle for To-Do lane only (first lane) */
+.kanban-plugin__lane-wrapper:nth-child(1) .kanban-plugin__lane-collapse {
+  display: flex !important;
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity 200ms ease;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+/* Hide lane settings menu (three-dot) */
+.kanban-plugin__lane-settings-button-wrapper {
+  display: none !important;
+}
+
+/* Disable lane title double-click editing */
+.kanban-plugin__lane-title {
+  pointer-events: none;
+}
+
+/* Hide lane settings panel that appears on edit */
+.kanban-plugin__lane-settings {
+  display: none !important;
+}
+
+/* Hide specific lanes - only show To-Do (1) and In Progress (2) */
+/* Recurring (3), Proposals (4), Waiting/Blocked (5), Delegated (6), Archive (7) are hidden */
+.kanban-plugin__lane-wrapper:nth-child(n+3) {
+  display: none !important;
+}
+
+/* =========================================
+   POKA-YOKE - Mistake-Proofing
+   =========================================
+   Hide unnecessary chrome to prevent accidental changes.
+   Keep the interface minimal and focused.
+   ========================================= */
+
+/* Hide search bar */
+.kanban-plugin__search-wrapper {
+  display: none !important;
+}
+
+/* Hide board view toggle buttons (table/list view) */
+.view-action[aria-label="Open as markdown"],
+.view-action[aria-label="Open board settings"],
+.view-action[aria-label="Toggle between Kanban and list view"],
+.view-action[aria-label="Toggle between Kanban and table view"] {
+  display: none !important;
+}
+
+/* Hide "Add a list" form and any lane adding UI */
+.kanban-plugin__lane-form-wrapper {
+  display: none !important;
 }
 
 .kanban-plugin {
@@ -20,8 +96,17 @@
   height: 100%;
   width: 100%;
   position: relative;
+  /* Default: flex column for mobile */
   display: flex;
   flex-direction: column;
+}
+
+/* Desktop: Two-column layout - board claims 2/3, pane 1/3 */
+body:not(.is-mobile) .kanban-plugin {
+  display: grid;
+  /* Board: dominant field | Pane: context column */
+  grid-template-columns: 2fr minmax(340px, 1fr);
+  grid-template-rows: 1fr;
 }
 
 .kanban-plugin,
@@ -82,7 +167,7 @@
     }
   }
 
-  thead tr > th {
+  thead tr>th {
     height: 1px;
     background-color: var(--background-primary);
     position: sticky;
@@ -180,11 +265,11 @@
   padding: 2px;
   border-radius: 4px;
 
-  > span {
+  >span {
     display: flex;
   }
 
-  div:hover > & {
+  div:hover>& {
     background-color: var(--background-modifier-hover);
   }
 }
@@ -203,7 +288,8 @@
 .kanban-plugin__icon-wrapper {
   display: flex;
   line-height: 1;
-  > .kanban-plugin__icon {
+
+  >.kanban-plugin__icon {
     display: flex;
   }
 }
@@ -265,10 +351,12 @@ button.kanban-plugin__search-cancel-button .kanban-plugin__icon {
 
 .kanban-plugin__board {
   display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
+  overflow: auto;
 
-  > div {
+  >div {
     display: flex;
     align-items: flex-start;
     justify-content: flex-start;
@@ -278,7 +366,7 @@ button.kanban-plugin__search-cancel-button .kanban-plugin__icon {
   }
 
   &.kanban-plugin__vertical {
-    > div {
+    >div {
       height: fit-content;
       width: 100%;
       flex-direction: column;
@@ -286,23 +374,39 @@ button.kanban-plugin__search-cancel-button .kanban-plugin__icon {
   }
 }
 
-.is-mobile .view-content:not(.is-mobile-editing) .kanban-plugin__board > div {
+/* Desktop: Board in left grid column, centered within */
+body:not(.is-mobile) .kanban-plugin__board {
+  grid-column: 1;
+  grid-row: 1;
+
+  >div {
+    padding: 1.5rem 2rem;
+    /* Center the lanes within the board column */
+    margin-left: auto;
+    margin-right: auto;
+    /* Slight bias toward left for quiet adjacency with pane */
+    padding-right: 3rem;
+  }
+}
+
+.is-mobile .view-content:not(.is-mobile-editing) .kanban-plugin__board>div {
   padding-bottom: calc(1rem + var(--mobile-navbar-height));
 }
 
-.kanban-plugin__board.is-adding-lane > div {
+.kanban-plugin__board.is-adding-lane>div {
   padding-inline-end: calc(250px + 1rem);
 }
 
 .kanban-plugin__lane-wrapper {
   display: flex;
   flex-shrink: 0;
-  margin-inline-end: 10px;
+  margin-inline-end: 14px;
+  /* Apple: larger gutter than internal card padding */
   max-height: 100%;
   width: var(--lane-width);
 
   .kanban-plugin__vertical & {
-    margin-block-end: 10px;
+    margin-block-end: 14px;
     margin-inline-end: 0;
   }
 }
@@ -311,14 +415,15 @@ button.kanban-plugin__search-cancel-button .kanban-plugin__icon {
   width: 100%;
   display: flex;
   flex-direction: column;
-  background-color: var(--background-secondary);
-  border-radius: 6px;
-  border: 1px solid var(--background-modifier-border);
+  /* Material: glass-on-black */
+  background-color: rgba(var(--mono-rgb-100), 0.02);
+  border-radius: 8px;
+  /* Border elimination: separation via depth only */
+  border: none;
 
-  .is-dropping > & {
-    background-color: hsla(var(--interactive-accent-hsl), 0.15);
-    border-color: hsla(var(--interactive-accent-hsl), 1);
-    outline: 1px solid hsla(var(--interactive-accent-hsl), 1);
+  .is-dropping>& {
+    background-color: hsla(var(--interactive-accent-hsl), 0.08);
+    box-shadow: 0 0 0 1px hsla(var(--interactive-accent-hsl), 0.4);
   }
 }
 
@@ -372,6 +477,7 @@ button.kanban-plugin__search-cancel-button .kanban-plugin__icon {
   justify-content: flex-start;
   padding-block: 0 10px;
   padding-inline: 10px;
+
   button {
     display: block;
     margin-inline-end: 5px;
@@ -382,6 +488,7 @@ button.kanban-plugin__item-action-add,
 button.kanban-plugin__lane-action-add {
   background-color: var(--interactive-accent);
   color: var(--text-on-accent);
+
   &:hover {
     background-color: var(--interactive-accent-hover);
   }
@@ -438,12 +545,12 @@ button.kanban-plugin__lane-action-add {
   flex-grow: 0;
   color: var(--text-faint);
 
-  > span {
+  >span {
     display: flex;
   }
 
   .collapse-vertical & {
-    > span {
+    >span {
       transform: rotate(-90deg);
     }
   }
@@ -453,6 +560,7 @@ button.kanban-plugin__lane-action-add {
   cursor: grab;
   flex-grow: 0;
   color: var(--text-faint);
+
   &:active {
     cursor: grabbing;
   }
@@ -462,14 +570,17 @@ button.kanban-plugin__lane-action-add {
   --icon-size: 1rem;
 }
 
-.kanban-plugin__lane-grip > svg {
+.kanban-plugin__lane-grip>svg {
   height: 1rem;
   display: block;
 }
 
 .kanban-plugin__lane-title {
-  font-weight: 600;
+  /* Hierarchy: inevitable, not emphasized */
+  font-weight: 450;
   font-size: 0.875rem;
+  letter-spacing: 0.01em;
+  opacity: 0.85;
   flex-grow: 1;
   width: 100%;
   display: flex;
@@ -483,10 +594,13 @@ button.kanban-plugin__lane-action-add {
 div.kanban-plugin__lane-title-count {
   border-radius: 3px;
   color: var(--text-muted);
+  /* Hierarchy: whisper, not announce */
+  opacity: 0.4;
   display: block;
-  font-size: 13px;
+  font-size: 10px;
   line-height: 1;
   padding: 4px;
+  margin-top: 2px;
 }
 
 div.kanban-plugin__lane-title-count.wip-exceeded {
@@ -507,10 +621,20 @@ div.kanban-plugin__lane-title-count.wip-exceeded {
   padding: 4px;
   display: flex;
   margin-inline-end: -4px;
+  /* Hierarchy: politely waiting to be noticed */
+  opacity: 0.2;
+  transition: opacity 200ms ease;
 
   &.is-enabled {
     color: var(--text-accent);
+    opacity: 1;
   }
+}
+
+/* Gradual reveal on hover */
+.kanban-plugin__item:hover .kanban-plugin__item-postfix-button,
+.kanban-plugin__lane:hover .kanban-plugin__lane-settings-button {
+  opacity: 0.6;
 }
 
 .kanban-plugin__table-cell-wrapper .kanban-plugin__lane-menu {
@@ -536,10 +660,10 @@ div.kanban-plugin__lane-title-count.wip-exceeded {
 .kanban-plugin__lane-action-wrapper,
 .kanban-plugin__item-edit-archive-button,
 .kanban-plugin__item-settings-actions .kanban-plugin__icon,
-.kanban-plugin__item-edit-archive-button > .kanban-plugin__icon,
-.kanban-plugin__item-prefix-button > .kanban-plugin__icon,
-.kanban-plugin__item-postfix-button > .kanban-plugin__icon,
-.kanban-plugin__lane-settings-button > .kanban-plugin__icon {
+.kanban-plugin__item-edit-archive-button>.kanban-plugin__icon,
+.kanban-plugin__item-prefix-button>.kanban-plugin__icon,
+.kanban-plugin__item-postfix-button>.kanban-plugin__icon,
+.kanban-plugin__lane-settings-button>.kanban-plugin__icon {
   display: flex;
 }
 
@@ -548,7 +672,7 @@ div.kanban-plugin__lane-title-count.wip-exceeded {
   gap: 4px;
 }
 
-button.kanban-plugin__lane-settings-button + button.kanban-plugin__lane-settings-button {
+button.kanban-plugin__lane-settings-button+button.kanban-plugin__lane-settings-button {
   margin-inline-start: 2px;
 }
 
@@ -568,13 +692,20 @@ button.kanban-plugin__lane-settings-button + button.kanban-plugin__lane-settings
   margin-inline: 4px;
   display: flex;
   flex-direction: column;
-  > div {
+
+  >div {
     margin-block-start: 4px;
   }
 }
 
-.kanban-plugin__lane-items > .kanban-plugin__placeholder {
+/* Desktop: 30% more vertical breathing room */
+body:not(.is-mobile) .kanban-plugin__lane-items>div {
+  margin-block-start: 6px;
+}
+
+.kanban-plugin__lane-items>.kanban-plugin__placeholder {
   flex-grow: 1;
+
   &:only-child {
     height: 2.55em;
     border: 3px dashed rgba(var(--text-muted-rgb), 0.1);
@@ -584,7 +715,7 @@ button.kanban-plugin__lane-settings-button + button.kanban-plugin__lane-settings
   }
 }
 
-.is-sorting .kanban-plugin__lane-items > .kanban-plugin__placeholder:only-child {
+.is-sorting .kanban-plugin__lane-items>.kanban-plugin__placeholder:only-child {
   border-color: hsla(var(--interactive-accent-hsl), 0.6);
 }
 
@@ -593,13 +724,14 @@ button.kanban-plugin__lane-settings-button + button.kanban-plugin__lane-settings
   padding: 8px;
   flex-shrink: 0;
   flex-grow: 0;
-  > button {
+
+  >button {
     text-align: left;
     width: 100%;
   }
 }
 
-.kanban-plugin__lane-header-wrapper + .kanban-plugin__item-button-wrapper {
+.kanban-plugin__lane-header-wrapper+.kanban-plugin__item-button-wrapper {
   border-top: none;
   border-bottom: 1px solid var(--background-modifier-border);
   padding-block: 4px 8px;
@@ -609,6 +741,7 @@ button.kanban-plugin__lane-settings-button + button.kanban-plugin__lane-settings
 .kanban-plugin__item-form {
   border-top: 1px solid var(--background-modifier-border);
   padding: 8px;
+
   .kanban-plugin__item-input-wrapper {
     padding-block: 6px;
     padding-inline: 8px;
@@ -619,7 +752,7 @@ button.kanban-plugin__lane-settings-button + button.kanban-plugin__lane-settings
   }
 }
 
-.kanban-plugin__lane-header-wrapper + .kanban-plugin__item-form {
+.kanban-plugin__lane-header-wrapper+.kanban-plugin__item-form {
   border-top: none;
   border-bottom: 1px solid var(--background-modifier-border);
   padding-block: 4px 8px;
@@ -660,10 +793,7 @@ button.kanban-plugin__lane-settings-button + button.kanban-plugin__lane-settings
   }
 }
 
-.is-mobile
-  .kanban-plugin
-  .kanban-plugin__lane-input-wrapper
-  button.kanban-plugin__item-submit-button {
+.is-mobile .kanban-plugin .kanban-plugin__lane-input-wrapper button.kanban-plugin__item-submit-button {
   display: none;
 }
 
@@ -677,7 +807,7 @@ button.kanban-plugin__new-item-button {
   background-color: var(--interactive-accent-hover);
 }
 
-.kanban-plugin__drag-container > .kanban-plugin__item-wrapper .kanban-plugin__item {
+.kanban-plugin__drag-container>.kanban-plugin__item-wrapper .kanban-plugin__item {
   border-color: var(--interactive-accent);
   box-shadow:
     var(--shadow-s),
@@ -686,27 +816,53 @@ button.kanban-plugin__new-item-button {
 
 .kanban-plugin__item {
   font-size: 0.875rem;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--input-radius);
+  letter-spacing: 0.01em;
+  /* Material: glass-on-black card */
+  background: rgba(var(--mono-rgb-100), 0.03);
+  /* Border elimination: ghost stroke via shadow */
+  border: none;
+  border-radius: 8px;
   overflow: hidden;
-  transition: 300ms opacity cubic-bezier(0.25, 1, 0.5, 1);
+  /* Depth-based shadow (no border) */
+  box-shadow:
+    0 1px 3px -1px rgba(0, 0, 0, 0.1),
+    0 0 0 0.5px rgba(255, 255, 255, 0.04);
+  /* Spring motion */
+  transform-origin: center;
+  transition:
+    transform 180ms cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 180ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 200ms ease;
+
+  /* Hover anticipation */
+  &:hover {
+    transform: translateY(-1px) scale(1.005);
+    box-shadow:
+      0 4px 10px -3px rgba(0, 0, 0, 0.15),
+      0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  }
+
+  /* Active: predictive lift */
+  &:active {
+    transform: scale(1.01) translateY(-2px);
+  }
 
   &:has(.markdown-source-view) {
-    outline: 1px solid var(--background-modifier-border-focus);
-    border-color: var(--background-modifier-border-focus);
+    box-shadow: 0 0 0 1px var(--background-modifier-border-focus);
   }
 }
 
 .kanban-plugin__item-content-wrapper {
-  background: var(--background-primary);
+  background: transparent;
 }
 
 .kanban-plugin__item-title-wrapper {
-  background: var(--background-primary);
+  background: transparent;
   display: flex;
-  padding-block: 6px;
+  padding-block: 5px;
   padding-inline: 8px;
-  // align-items: center;
+  line-height: 1.4;
+  /* Typography rhythm */
 
   &:not(:only-child) {
     border-bottom: 1px solid var(--background-modifier-border);
@@ -715,7 +871,8 @@ button.kanban-plugin__new-item-button {
 
 .kanban-plugin__item-title {
   width: 100%;
-  line-height: var(--line-height-tight);
+  line-height: 1.35;
+  /* Apple: slightly tighter for density */
   margin-block-start: 1px;
 }
 
@@ -740,11 +897,11 @@ button.kanban-plugin__new-item-button {
   }
 
   .kanban-plugin__markdown-preview-view {
-    > *:first-child {
+    >*:first-child {
       margin-block-start: 0;
     }
 
-    > *:last-child {
+    >*:last-child {
       margin-block-end: 0;
     }
   }
@@ -777,11 +934,11 @@ button.kanban-plugin__new-item-button {
   .kanban-plugin__markdown-preview-view {
     display: inline-flex;
 
-    > div:first-child > *:first-child {
+    >div:first-child>*:first-child {
       margin-block-start: 0;
     }
 
-    > div:last-child > *:last-child {
+    >div:last-child>*:last-child {
       margin-block-end: 0;
     }
   }
@@ -808,7 +965,7 @@ button.kanban-plugin__new-item-button {
   }
 }
 
-.kanban-plugin__item-metadata > span {
+.kanban-plugin__item-metadata>span {
   display: block;
 
   &.kanban-plugin__item-metadata-date-wrapper {
@@ -818,6 +975,7 @@ button.kanban-plugin__new-item-button {
 
 .kanban-plugin__item-metadata .is-button {
   cursor: var(--cursor);
+
   &:hover {
     color: var(--text-normal);
   }
@@ -897,7 +1055,7 @@ button.kanban-plugin__new-item-button {
     width: 10%;
   }
 
-  td + td {
+  td+td {
     width: 90%;
   }
 
@@ -912,7 +1070,7 @@ button.kanban-plugin__new-item-button {
   color: var(--text-muted);
 }
 
-.kanban-plugin__meta-table td.kanban-plugin__meta-key.is-search-match > span {
+.kanban-plugin__meta-table td.kanban-plugin__meta-key.is-search-match>span {
   background-color: var(--text-highlight-bg);
   color: var(--text-normal);
 }
@@ -922,7 +1080,7 @@ button.kanban-plugin__new-item-button {
   display: flex;
 }
 
-.kanban-plugin__meta-value > .is-search-match,
+.kanban-plugin__meta-value>.is-search-match,
 .kanban-plugin__meta-value.is-search-match {
   background-color: var(--text-highlight-bg);
   color: var(--text-normal);
@@ -935,7 +1093,7 @@ button.kanban-plugin__new-item-button {
   flex-shrink: 0;
   align-self: start;
 
-  > div {
+  >div {
     display: flex;
     flex-direction: column;
     gap: var(--size-4-1);
@@ -955,7 +1113,8 @@ button.kanban-plugin__new-item-button {
 .kanban-plugin__item-prefix-button-wrapper input[type='checkbox'] {
   margin-block: 2px;
   margin-inline: 0px 7px;
-  + button {
+
+  +button {
     margin-block-start: 10px;
   }
 }
@@ -979,7 +1138,7 @@ button.kanban-plugin__item-postfix-button.is-enabled,
   display: flex;
 }
 
-.kanban-plugin__item-settings-actions > button {
+.kanban-plugin__item-settings-actions>button {
   line-height: 1;
   display: flex;
   align-items: center;
@@ -988,18 +1147,18 @@ button.kanban-plugin__item-postfix-button.is-enabled,
   width: 100%;
 }
 
-.kanban-plugin__lane-action-wrapper button > .kanban-plugin__icon,
-.kanban-plugin__item-settings-actions button > .kanban-plugin__icon {
+.kanban-plugin__lane-action-wrapper button>.kanban-plugin__icon,
+.kanban-plugin__item-settings-actions button>.kanban-plugin__icon {
   margin-inline-end: 5px;
 }
 
-.kanban-plugin__item-settings-actions > button:first-child,
-.kanban-plugin__lane-action-wrapper > button:first-child {
+.kanban-plugin__item-settings-actions>button:first-child,
+.kanban-plugin__lane-action-wrapper>button:first-child {
   margin-inline-end: 2.5px;
 }
 
-.kanban-plugin__item-settings-actions > button:last-child,
-.kanban-plugin__lane-action-wrapper > button:last-child {
+.kanban-plugin__item-settings-actions>button:last-child,
+.kanban-plugin__lane-action-wrapper>button:last-child {
   margin-inline-start: 2.5px;
 }
 
@@ -1055,7 +1214,7 @@ button.kanban-plugin__item-postfix-button.is-enabled,
   line-height: var(--line-height-tight);
 }
 
-.kanban-plugin__lane-setting-wrapper > div {
+.kanban-plugin__lane-setting-wrapper>div {
   border-top: none;
   border-bottom: none;
   padding-block: 10px;
@@ -1063,7 +1222,7 @@ button.kanban-plugin__item-postfix-button.is-enabled,
   margin-block-end: 0;
 }
 
-.kanban-plugin__lane-setting-wrapper > div:last-child {
+.kanban-plugin__lane-setting-wrapper>div:last-child {
   border-bottom: 1px solid var(--background-modifier-border);
   margin-block-end: 10px;
 }
@@ -1485,7 +1644,8 @@ button.kanban-plugin__cancel-action-button {
   border-top: 0;
   padding: 0;
   flex-direction: column;
-  > div {
+
+  >div {
     width: 100%;
     margin-inline-end: 0 !important;
   }
@@ -1495,7 +1655,7 @@ button.kanban-plugin__cancel-action-button {
   border-top: 1px solid var(--background-modifier-border);
 }
 
-.kanban-plugin__draggable-setting-container > .kanban-plugin__placeholder {
+.kanban-plugin__draggable-setting-container>.kanban-plugin__placeholder {
   border-top: 1px solid var(--background-modifier-border);
 }
 
@@ -1526,18 +1686,19 @@ button.kanban-plugin__cancel-action-button {
   flex-wrap: wrap;
   margin-block-end: 1rem;
 
-  > div {
+  >div {
     margin-inline-end: 10px;
   }
 }
 
 .kanban-plugin__setting-toggle-wrapper {
-  > div {
+  >div {
     display: flex;
     align-items: center;
     line-height: 1;
     margin-block-end: 10px;
   }
+
   .checkbox-container {
     margin-inline-end: 10px;
   }
@@ -1549,7 +1710,8 @@ button.kanban-plugin__cancel-action-button {
   flex-grow: 1;
   flex-shrink: 0;
   max-width: 25px;
-  > div {
+
+  >div {
     margin-inline-start: 12px;
   }
 }
@@ -1557,7 +1719,8 @@ button.kanban-plugin__cancel-action-button {
 .kanban-plugin__setting-key-input-wrapper {
   margin-block: 1rem;
   margin-inline: 0;
-  > input {
+
+  >input {
     margin-inline-end: 10px;
   }
 }
@@ -1575,6 +1738,7 @@ button.kanban-plugin__cancel-action-button {
   .kanban-plugin__setting-key-input-wrapper {
     margin-block-start: 0;
   }
+
   .kanban-plugin__setting-input-wrapper {
     margin: 0;
   }
@@ -1722,6 +1886,7 @@ body:not(.native-scrollbars) .kanban-plugin__scroll-container::-webkit-scrollbar
   0% {
     transform: scale(0);
   }
+
   100% {
     transform: scale(1);
     opacity: 0;
@@ -1756,8 +1921,8 @@ body:not(.native-scrollbars) .kanban-plugin__scroll-container::-webkit-scrollbar
     --link-unresolved-decoration-style: unset;
   }
 
-  > span,
-  > a {
+  >span,
+  >a {
     padding-inline: var(--size-2-1);
   }
 }
@@ -1765,6 +1930,7 @@ body:not(.native-scrollbars) .kanban-plugin__scroll-container::-webkit-scrollbar
 .completion .kanban-plugin__date.has-background {
   color: inherit;
   background-color: transparent;
+
   &:hover {
     background-color: transparent;
   }
@@ -1772,6 +1938,7 @@ body:not(.native-scrollbars) .kanban-plugin__scroll-container::-webkit-scrollbar
 
 .is-date .kanban-plugin__date:not(.has-background) {
   background-color: transparent;
+
   &:hover {
     background-color: transparent;
   }
@@ -1780,5 +1947,1301 @@ body:not(.native-scrollbars) .kanban-plugin__scroll-container::-webkit-scrollbar
 .kanban-plugin__meta-value {
   .kanban-plugin__date:hover {
     background-color: var(--date-background-color, rgba(var(--mono-rgb-100), 0.05));
+  }
+}
+
+/* ========================================
+   PORTUS v2: Detail Pane
+   ======================================== */
+
+/* Mobile: Panes are full-screen overlays (position: fixed) */
+.kanban-plugin__side-pane,
+.kanban-plugin__detail-pane {
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: 380px;
+  height: 100%;
+  background: var(--background-primary);
+  border-left: 1px solid rgba(var(--mono-rgb-100), 0.06);
+  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: portus-slide-in 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+  z-index: 100;
+}
+
+/* Desktop: Panes are peer columns in the grid (not overlays) */
+body:not(.is-mobile) .kanban-plugin__side-pane,
+body:not(.is-mobile) .kanban-plugin__detail-pane {
+  position: static;
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
+  z-index: auto;
+}
+
+.kanban-plugin__side-pane-header,
+.kanban-plugin__detail-pane-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.kanban-plugin__side-pane-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-normal);
+}
+
+.kanban-plugin__side-pane-close,
+.kanban-plugin__detail-pane-close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
+}
+
+.kanban-plugin__side-pane-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+@keyframes portus-slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.theme-dark .kanban-plugin__detail-pane {
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.3);
+}
+
+/* Pane Header */
+.kanban-plugin__detail-pane-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.kanban-plugin__detail-pane-close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
+}
+
+/* Pane Content */
+.kanban-plugin__detail-pane-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Pane Label */
+.kanban-plugin__pane-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+/* Pane Title */
+.kanban-plugin__pane-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-normal);
+  margin: 0;
+  cursor: text;
+  padding: 4px 0;
+
+  &:hover {
+    background: var(--background-modifier-hover);
+    border-radius: 4px;
+  }
+}
+
+.kanban-plugin__pane-title-input {
+  width: 100%;
+  font-size: 18px;
+  font-weight: 600;
+  background: var(--background-primary);
+  border: 1px solid var(--interactive-accent);
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: var(--text-normal);
+}
+
+/* Pane Status Select */
+.kanban-plugin__pane-status-select {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 14px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-normal);
+  cursor: pointer;
+
+  &:focus {
+    border-color: var(--interactive-accent);
+    outline: none;
+  }
+}
+
+/* Pane Notes */
+.kanban-plugin__pane-notes-input {
+  width: 100%;
+  min-height: 100px;
+  padding: 12px;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.5;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-normal);
+  resize: vertical;
+
+  &:focus {
+    border-color: var(--interactive-accent);
+    outline: none;
+  }
+
+  &::placeholder {
+    color: var(--text-muted);
+  }
+}
+
+/* Pane Checklist */
+.kanban-plugin__pane-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kanban-plugin__pane-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--background-secondary);
+  border-radius: 4px;
+  margin-bottom: 4px;
+
+  &.is-checked span {
+    text-decoration: line-through;
+    opacity: 0.6;
+  }
+}
+
+.kanban-plugin__pane-checklist-delete {
+  opacity: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+
+  .kanban-plugin__pane-checklist-item:hover & {
+    opacity: 1;
+  }
+
+  &:hover {
+    color: var(--text-error);
+  }
+}
+
+.kanban-plugin__pane-checklist-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.kanban-plugin__pane-checklist-input {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 13px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  color: var(--text-normal);
+
+  &:focus {
+    border-color: var(--interactive-accent);
+    outline: none;
+  }
+}
+
+.kanban-plugin__pane-checklist-add-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+/* Card Selection State */
+.kanban-plugin__item.is-selected {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+}
+
+/* Archive Pane - v2.1 */
+.kanban-plugin__archive-pane {
+  width: 380px;
+  min-width: 380px;
+  height: 100%;
+  background: var(--background-primary);
+  border-left: 1px solid var(--background-modifier-border);
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: portus-slide-in 0.25s ease-out;
+}
+
+.theme-dark .kanban-plugin__archive-pane {
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.3);
+}
+
+.kanban-plugin__archive-pane-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.kanban-plugin__archive-pane-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-normal);
+}
+
+.kanban-plugin__archive-count {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.kanban-plugin__archive-pane-close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
+}
+
+.kanban-plugin__archive-search-wrapper {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kanban-plugin__archive-search-input {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 13px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-normal);
+
+  &:focus {
+    border-color: var(--interactive-accent);
+    outline: none;
+  }
+
+  &::placeholder {
+    color: var(--text-muted);
+  }
+}
+
+.kanban-plugin__archive-search-clear {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
+}
+
+.kanban-plugin__archive-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.kanban-plugin__archive-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Universal Side Pane Card - v2.1 Premium */
+.kanban-plugin__side-pane-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 150ms ease;
+
+  &:hover {
+    background: var(--background-modifier-hover);
+    border-color: var(--interactive-accent-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.kanban-plugin__side-pane-card-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kanban-plugin__side-pane-card-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-normal);
+  line-height: 1.5;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.kanban-plugin__side-pane-card-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.kanban-plugin__side-pane-card-action {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: all 150ms ease;
+
+  &:hover {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    opacity: 1;
+  }
+}
+
+/* Legacy archive-item styles (backwards compat) */
+.kanban-plugin__archive-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  transition: background 150ms ease;
+
+  &:hover {
+    background: var(--background-modifier-hover);
+  }
+}
+
+.kanban-plugin__archive-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.kanban-plugin__archive-item-title {
+  font-size: 13px;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.kanban-plugin__archive-restore-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: 8px;
+
+  &:hover {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+  }
+}
+
+/* Priority Card Outlines - v2.1 */
+.kanban-plugin__item.is-high-priority {
+  outline: 2px solid #e74c3c;
+  outline-offset: -2px;
+}
+
+.kanban-plugin__item.is-low-priority {
+  outline: 2px solid #27ae60;
+  outline-offset: -2px;
+}
+
+/* Hide inline field metadata text on cards (priority, notes, status) */
+/* Priority text is now stripped in list.ts - these are just fallback styles */
+.kanban-plugin__item-markdown code:empty {
+  display: none;
+}
+
+.kanban-plugin__item .cm-inline-code {
+  display: none;
+}
+
+/* Side Pane Field Layout - v2.1 */
+.kanban-plugin__pane-row {
+  display: flex;
+  gap: 16px;
+}
+
+.kanban-plugin__pane-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.kanban-plugin__pane-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.kanban-plugin__pane-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-normal);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.kanban-plugin__pane-status-select,
+.kanban-plugin__pane-priority-select {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-normal);
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+    border-color: var(--interactive-accent);
+  }
+}
+
+/* Status chip for archived/done/delegated items */
+.kanban-plugin__pane-status-chip {
+  display: inline-block;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+}
+
+/* Archive date chip */
+.kanban-plugin__pane-date-chip {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--background-modifier-hover);
+  border-radius: 12px;
+}
+
+.kanban-plugin__pane-notes-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.kanban-plugin__pane-notes-input {
+  width: 100%;
+  min-height: 100px;
+  padding: 12px;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-normal);
+  resize: none;
+  overflow-y: auto;
+
+  &:focus {
+    outline: none;
+    border-color: var(--interactive-accent);
+  }
+
+  &::placeholder {
+    color: var(--text-muted);
+  }
+}
+
+/* Editable Title Input - v2.1 */
+.kanban-plugin__pane-title-input {
+  width: 100%;
+  padding: 0;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  color: var(--text-normal);
+  line-height: 1.5;
+  resize: none;
+  overflow: hidden;
+
+  &:focus {
+    outline: none;
+  }
+
+  &::placeholder {
+    color: var(--text-muted);
+  }
+}
+
+/* =========================================
+   PORTUS MOBILE: iPhone 17 Air Optimization
+   =========================================
+   Targets Obsidian's .is-mobile class for mobile devices.
+   All changes are scoped to preserve desktop UX.
+   ========================================= */
+
+/* Full-screen SidePane on mobile - iOS Sheet Style */
+.is-mobile .kanban-plugin__side-pane,
+.is-mobile .kanban-plugin__detail-pane {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 100%;
+  height: 100%;
+  border-left: none;
+  border-radius: 0;
+  box-shadow: none;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  /* Safe area handled by header, not container */
+}
+
+.is-mobile .kanban-plugin__archive-pane {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 100%;
+  height: 100%;
+  border-left: none;
+  border-radius: 0;
+  box-shadow: none;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+/* Mobile pane header - iOS safe area + compact height */
+.is-mobile .kanban-plugin__side-pane-header,
+.is-mobile .kanban-plugin__detail-pane-header,
+.is-mobile .kanban-plugin__archive-pane-header {
+  padding: 12px 16px;
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
+  min-height: 44px;
+  flex-shrink: 0;
+}
+
+/* Mobile close buttons - 44pt touch target */
+.is-mobile .kanban-plugin__side-pane-close,
+.is-mobile .kanban-plugin__detail-pane-close,
+.is-mobile .kanban-plugin__archive-pane-close {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* Mobile pane content - full height with bottom safe area */
+.is-mobile .kanban-plugin__side-pane-content,
+.is-mobile .kanban-plugin__detail-pane-content,
+.is-mobile .kanban-plugin__archive-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  /* Smooth scrolling for iOS */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile lane optimization - single lane focus with horizontal scroll */
+.is-mobile .kanban-plugin {
+  --lane-width: calc(100vw - 32px);
+}
+
+.is-mobile .kanban-plugin__board>div {
+  /* Horizontal scroll snap for lane-by-lane navigation */
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.is-mobile .kanban-plugin__lane-wrapper {
+  scroll-snap-align: center;
+  flex-shrink: 0;
+}
+
+/* =========================================
+   Mobile Cards - Apple Style
+   =========================================
+   iOS design: 12px corners, soft borders, consistent styling
+   ========================================= */
+
+/* Mobile card base - Apple 12px corners, soft border, vertical-bias shadow */
+.is-mobile .kanban-plugin__item {
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--mono-rgb-100), 0.08);
+  background: var(--background-primary);
+  overflow: hidden;
+  letter-spacing: 0.01em;
+  /* Apple: consistent tracking */
+  /* Apple: soft vertical-bias shadow for elevation */
+  box-shadow:
+    0 1px 3px -1px rgba(0, 0, 0, 0.1),
+    0 2px 6px -2px rgba(0, 0, 0, 0.06);
+}
+
+/* Mobile: action buttons always visible (no hover on touch) */
+.is-mobile .kanban-plugin__item .kanban-plugin__item-postfix-button,
+.is-mobile .kanban-plugin__lane .kanban-plugin__lane-settings-button {
+  opacity: 1;
+}
+
+/* Mobile card content wrapper - match parent radius */
+.is-mobile .kanban-plugin__item-content-wrapper {
+  border-radius: 12px;
+}
+
+/* Mobile card title area */
+.is-mobile .kanban-plugin__item-title-wrapper {
+  padding: 14px 16px;
+  border-radius: 12px;
+}
+
+/* =========================================
+   Mobile Inline Card Editing - Apple Style
+   =========================================
+   Key principles:
+   - Auto-height, content at TOP (not bottom)
+   - No wasted vertical space
+   - Minimal chrome (hide submit button - tap outside to save)
+   - Text input at top with flex-start
+   ========================================= */
+
+/* Card in editing mode - clean accent border */
+.is-mobile .kanban-plugin__item:has(.markdown-source-view) {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+/* Mobile item form container - tight padding */
+.is-mobile .kanban-plugin__item-form {
+  padding: 8px;
+}
+
+.is-mobile .kanban-plugin__item-form .kanban-plugin__item-input-wrapper {
+  padding: 12px;
+  border-radius: 12px;
+  min-height: unset !important;
+  height: auto !important;
+}
+
+/* cm-table-widget is the actual editor container */
+.is-mobile .kanban-plugin__item-form .cm-table-widget {
+  height: auto !important;
+  min-height: unset !important;
+  display: block !important;
+}
+
+/* Mobile markdown source view - force auto height */
+.is-mobile .kanban-plugin .markdown-source-view.mod-cm6 {
+  font-size: 16px !important;
+  /* Prevents iOS zoom */
+  min-height: unset !important;
+  height: auto !important;
+}
+
+/* cm-editor is the CodeMirror root */
+.is-mobile .kanban-plugin .cm-editor {
+  min-height: unset !important;
+  height: auto !important;
+}
+
+/* cm-scroller - this is often what has the fixed height */
+.is-mobile .kanban-plugin .cm-scroller {
+  min-height: unset !important;
+  height: auto !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* cm-content - the actual editable content area */
+.is-mobile .kanban-plugin .cm-content {
+  min-height: unset !important;
+  height: auto !important;
+  padding: 8px 0 !important;
+}
+
+/* cm-sizer - sometimes this causes height issues */
+.is-mobile .kanban-plugin .cm-sizer {
+  min-height: unset !important;
+}
+
+/* cm-contentContainer */
+.is-mobile .kanban-plugin .cm-contentContainer {
+  min-height: unset !important;
+  height: auto !important;
+}
+
+/* Content wrapper - NO min-height, flex start */
+.is-mobile .kanban-plugin__item-form .kanban-plugin__item-content-wrapper {
+  min-height: unset !important;
+  height: auto !important;
+}
+
+/* HIDE submit button on mobile - tap outside to save (Apple pattern) */
+.is-mobile .kanban-plugin__item-form .kanban-plugin__item-submit-button {
+  display: none !important;
+}
+
+/* Mobile item input actions - compact */
+.is-mobile .kanban-plugin__item-input-actions {
+  padding: 8px 12px;
+  gap: 8px;
+}
+
+.is-mobile .kanban-plugin__item-input-actions button {
+  min-height: 44px;
+  padding: 10px 16px;
+  font-size: 15px;
+}
+
+/* Mobile card buttons - enlarged for touch */
+.is-mobile .kanban-plugin__item-prefix-button,
+.is-mobile .kanban-plugin__item-postfix-button {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+}
+
+/* Mobile lane header buttons - 44pt touch targets */
+.is-mobile .kanban-plugin__lane-settings-button {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px;
+}
+
+.is-mobile .kanban-plugin__lane-collapse,
+.is-mobile .kanban-plugin__lane-grip {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Mobile lane header - improved spacing */
+.is-mobile .kanban-plugin__lane-header-wrapper {
+  padding: 12px;
+  gap: var(--size-4-2);
+}
+
+/* Mobile new item button - large touch target */
+.is-mobile button.kanban-plugin__new-item-button {
+  min-height: 48px;
+  padding-block: 12px;
+}
+
+/* Mobile search input - optimized for touch */
+.is-mobile .kanban-plugin__archive-search-input {
+  padding: 12px 16px;
+  font-size: 16px;
+  /* Prevents iOS zoom on focus */
+  min-height: 44px;
+}
+
+.is-mobile .kanban-plugin__archive-search-clear {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+}
+
+/* Mobile archive items - larger touch targets */
+.is-mobile .kanban-plugin__archive-item {
+  padding: 14px 16px;
+  min-height: 56px;
+}
+
+.is-mobile .kanban-plugin__archive-restore-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+}
+
+/* Mobile pane form inputs - prevent iOS zoom (16px minimum) */
+.is-mobile .kanban-plugin__pane-status-select,
+.is-mobile .kanban-plugin__pane-priority-select {
+  padding: 12px 16px;
+  font-size: 16px;
+  min-height: 48px;
+}
+
+.is-mobile .kanban-plugin__pane-notes-input {
+  padding: 16px;
+  font-size: 16px;
+  min-height: 120px;
+}
+
+.is-mobile .kanban-plugin__pane-title-input {
+  font-size: 18px;
+  min-height: 44px;
+}
+
+/* Mobile checklist - touch-optimized */
+.is-mobile .kanban-plugin__pane-checklist-item {
+  padding: 12px;
+  min-height: 48px;
+}
+
+.is-mobile .kanban-plugin__pane-checklist-input {
+  padding: 12px;
+  font-size: 16px;
+  min-height: 44px;
+}
+
+.is-mobile .kanban-plugin__pane-checklist-add-btn {
+  padding: 12px 20px;
+  font-size: 16px;
+  min-height: 44px;
+}
+
+.is-mobile .kanban-plugin__pane-checklist-delete {
+  width: 44px;
+  height: 44px;
+  opacity: 1;
+  /* Always visible on touch devices */
+}
+
+/* Mobile typography adjustments */
+.is-mobile .kanban-plugin__pane-label {
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.is-mobile .kanban-plugin__side-pane-title,
+.is-mobile .kanban-plugin__archive-pane-title {
+  font-size: 16px;
+}
+
+/* =========================================
+   APPLE FINAL POLISH - Perception Refinements
+   =========================================
+   "You are no longer fixing problems. You are polishing perception."
+   ========================================= */
+
+/* Header "Portus" title - reduce prominence, anchor don't announce */
+.is-mobile .kanban-plugin .view-header-title {
+  font-weight: 450;
+  /* Apple: half-step lighter */
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  opacity: 0.9;
+}
+
+/* Circular header buttons - glass translucency */
+.is-mobile .kanban-plugin .view-header-nav-buttons button,
+.is-mobile .kanban-plugin .view-actions button {
+  background: rgba(var(--mono-rgb-100), 0.06);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(var(--mono-rgb-100), 0.04);
+  opacity: 0.85;
+  transition: opacity 180ms ease, background 180ms ease;
+}
+
+.is-mobile .kanban-plugin .view-header-nav-buttons button:active,
+.is-mobile .kanban-plugin .view-actions button:active {
+  opacity: 1;
+  background: rgba(var(--mono-rgb-100), 0.12);
+}
+
+/* Column header count - informational, not interactive */
+.is-mobile .kanban-plugin__lane-title-count {
+  font-weight: 400;
+  /* Apple: lighter weight */
+  opacity: 0.5;
+  /* Apple: lower contrast */
+  font-size: 11px;
+}
+
+/* Card borders - let shadow do separation, not stroke */
+.is-mobile .kanban-plugin__item {
+  border-color: rgba(var(--mono-rgb-100), 0.04);
+  /* Apple: nearly invisible */
+  /* More diffuse, lower opacity shadow for "liquid glass" */
+  box-shadow:
+    0 1px 4px -1px rgba(0, 0, 0, 0.08),
+    0 3px 8px -2px rgba(0, 0, 0, 0.04),
+    0 0 0 0.5px rgba(var(--mono-rgb-100), 0.03);
+  /* subtle inner glow */
+}
+
+/* Card typography - improved line height for mobile scanning */
+.is-mobile .kanban-plugin__item-title {
+  line-height: 1.45;
+  /* Apple: comfortable scanning rhythm */
+}
+
+.is-mobile .kanban-plugin__item-title-wrapper {
+  padding: 12px 14px;
+  /* Slightly more breathing room */
+}
+
+/* Three-dot menu on cards - intent-driven reveal */
+.is-mobile .kanban-plugin__item .kanban-plugin__item-postfix-button {
+  opacity: 0.35;
+  /* Apple: nearly invisible until touched */
+  transition: opacity 200ms ease;
+}
+
+.is-mobile .kanban-plugin__item:active .kanban-plugin__item-postfix-button {
+  opacity: 1;
+}
+
+/* Lane three-dot menu - quieter default */
+.is-mobile .kanban-plugin__lane-settings-button {
+  opacity: 0.4;
+}
+
+.is-mobile .kanban-plugin__lane:active .kanban-plugin__lane-settings-button {
+  opacity: 1;
+}
+
+/* "+ Add a card" - larger tap target, subtle text */
+.is-mobile button.kanban-plugin__new-item-button {
+  min-height: 52px;
+  /* Apple: forgiving tap target */
+  padding-block: 14px;
+  opacity: 0.7;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.is-mobile button.kanban-plugin__new-item-button:active {
+  opacity: 1;
+}
+
+/* =========================================
+   DETAIL PANE - Perception Polish
+   =========================================
+   "Subtracting emphasis from anything that is not the task itself."
+   ========================================= */
+
+/* Header in detail context - de-emphasize global identity */
+.is-mobile .kanban-plugin__detail-pane .view-header-title,
+.is-mobile .kanban-plugin__side-pane .view-header-title {
+  font-size: 14px;
+  font-weight: 400;
+  opacity: 0.6;
+  /* Apple: fade into background mentally */
+}
+
+/* Close button - lighter, more translucent */
+.is-mobile .kanban-plugin__detail-pane-close,
+.is-mobile .kanban-plugin__side-pane-close {
+  background: rgba(var(--mono-rgb-100), 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(var(--mono-rgb-100), 0.03);
+}
+
+/* "Details" label - softer, more separation from title */
+.is-mobile .kanban-plugin__pane-label {
+  font-size: 10px;
+  /* Apple: smaller structural label */
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  opacity: 0.5;
+  /* Apple: clearly secondary */
+  margin-bottom: 10px;
+  /* More space before title */
+}
+
+/* Title section - breathing room and pause before controls */
+.is-mobile .kanban-plugin__pane-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+  /* Apple: comfortable reading */
+  margin-bottom: 24px;
+  /* Apple: pause before interface resumes */
+}
+
+.is-mobile .kanban-plugin__pane-title-input {
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+/* Status/Priority controls - selections, not form fields */
+.is-mobile .kanban-plugin__pane-status-select,
+.is-mobile .kanban-plugin__pane-priority-select {
+  background: rgba(var(--mono-rgb-100), 0.03);
+  /* Apple: recessed surface */
+  border: 1px solid rgba(var(--mono-rgb-100), 0.06);
+  /* Apple: ghosted border */
+  border-radius: 10px;
+  /* Apple: softer shape */
+  padding: 14px 16px;
+  font-size: 15px;
+}
+
+/* Status/Priority labels - even lighter */
+.is-mobile .kanban-plugin__pane-field .kanban-plugin__pane-label {
+  font-size: 10px;
+  opacity: 0.45;
+  margin-bottom: 8px;
+}
+
+/* Row between Status and Priority - tighter internal spacing */
+.is-mobile .kanban-plugin__pane-row {
+  gap: 12px;
+  margin-bottom: 28px;
+  /* Apple: larger gap before next section */
+}
+
+/* Notes section - recessed not framed */
+.is-mobile .kanban-plugin__pane-notes-input {
+  background: rgba(var(--mono-rgb-100), 0.02);
+  /* Apple: subtle recessed area */
+  border: 1px solid rgba(var(--mono-rgb-100), 0.05);
+  /* Apple: ghosted */
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.is-mobile .kanban-plugin__pane-notes-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.5;
+  /* Apple: guidance, not content */
+}
+
+/* Notes label - consistent with others */
+.is-mobile .kanban-plugin__pane-notes-section .kanban-plugin__pane-label {
+  margin-bottom: 10px;
+}
+
+/* Pane content - varied vertical rhythm */
+.is-mobile .kanban-plugin__detail-pane-content,
+.is-mobile .kanban-plugin__side-pane-content {
+  padding: 20px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  gap: 0;
+  /* Remove uniform gap, use margin-bottom instead */
+}
+
+/* Section spacing hierarchy */
+.is-mobile .kanban-plugin__pane-field {
+  margin-bottom: 20px;
+  /* Default within-section spacing */
+}
+
+.is-mobile .kanban-plugin__pane-notes-section {
+  margin-top: 8px;
+  /* Notes sits naturally after status row */
+}
+
+/* Mobile slide-in animation - Apple spring curve */
+.is-mobile .kanban-plugin__side-pane,
+.is-mobile .kanban-plugin__detail-pane,
+.is-mobile .kanban-plugin__archive-pane {
+  animation: portus-mobile-slide-in 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes portus-mobile-slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0.8;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* =========================================
+   DRAG STATE - Lifted Card Styling
+   =========================================
+   Cards cast deeper shadows when picked up.
+   ========================================= */
+
+.kanban-plugin__drag-container .kanban-plugin__item {
+  box-shadow:
+    0 12px 28px -6px rgba(0, 0, 0, 0.25),
+    0 6px 12px -3px rgba(0, 0, 0, 0.12);
+  transform: scale(1.02);
+  opacity: 0.95;
+}
+
+/* Landscape orientation adjustments for iPad/larger phones */
+@media (orientation: landscape) {
+
+  .is-mobile .kanban-plugin__side-pane,
+  .is-mobile .kanban-plugin__detail-pane,
+  .is-mobile .kanban-plugin__archive-pane {
+    width: 50vw;
+    max-width: 420px;
+    min-width: 320px;
+    border-left: 1px solid var(--background-modifier-border);
   }
 }

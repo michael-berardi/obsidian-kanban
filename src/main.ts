@@ -28,21 +28,43 @@ interface WindowRegistry {
 }
 
 function getEditorClass(app: any) {
-  const md = app.embedRegistry.embedByExtension.md(
-    { app: app, containerEl: createDiv(), state: {} },
-    null,
-    ''
-  );
+  try {
+    const md = app.embedRegistry?.embedByExtension?.md?.(
+      { app: app, containerEl: createDiv(), state: {} },
+      null,
+      ''
+    );
 
-  md.load();
-  md.editable = true;
-  md.showEditor();
+    if (!md) {
+      console.error('Kanban: Could not create markdown embed');
+      return null;
+    }
 
-  const MarkdownEditor = Object.getPrototypeOf(Object.getPrototypeOf(md.editMode)).constructor;
+    md.load();
+    md.editable = true;
+    md.showEditor();
 
-  md.unload();
+    const editMode = md.editMode;
+    if (!editMode) {
+      console.error('Kanban: Could not get editMode');
+      md.unload();
+      return null;
+    }
 
-  return MarkdownEditor;
+    const MarkdownEditor = Object.getPrototypeOf(Object.getPrototypeOf(editMode))?.constructor;
+
+    md.unload();
+
+    if (!MarkdownEditor || MarkdownEditor === Object) {
+      console.error('Kanban: Could not get MarkdownEditor class');
+      return null;
+    }
+
+    return MarkdownEditor;
+  } catch (e) {
+    console.error('Kanban: Error getting MarkdownEditor class', e);
+    return null;
+  }
 }
 
 export default class KanbanPlugin extends Plugin {
@@ -445,73 +467,6 @@ export default class KanbanPlugin extends Plugin {
             });
           }
 
-          if (Platform.isMobile) {
-            const stateManager = this.stateManagers.get(file);
-            const kanbanView = leaf.view as KanbanView;
-            const boardView =
-              kanbanView.viewSettings[frontmatterKey] || stateManager.getSetting(frontmatterKey);
-
-            menu
-              .addItem((item) => {
-                item
-                  .setTitle(t('Add a list'))
-                  .setIcon('lucide-plus-circle')
-                  .setSection('pane')
-                  .onClick(() => {
-                    kanbanView.emitter.emit('showLaneForm', undefined);
-                  });
-              })
-              .addItem((item) => {
-                item
-                  .setTitle(t('Archive completed cards'))
-                  .setIcon('lucide-archive')
-                  .setSection('pane')
-                  .onClick(() => {
-                    stateManager.archiveCompletedCards();
-                  });
-              })
-              .addItem((item) => {
-                item
-                  .setTitle(t('Archive completed cards'))
-                  .setIcon('lucide-archive')
-                  .setSection('pane')
-                  .onClick(() => {
-                    const stateManager = this.stateManagers.get(file);
-                    stateManager.archiveCompletedCards();
-                  });
-              })
-              .addItem((item) =>
-                item
-                  .setTitle(t('View as board'))
-                  .setSection('pane')
-                  .setIcon('lucide-trello')
-                  .setChecked(boardView === 'basic' || boardView === 'board')
-                  .onClick(() => kanbanView.setView('board'))
-              )
-              .addItem((item) =>
-                item
-                  .setTitle(t('View as table'))
-                  .setSection('pane')
-                  .setIcon('lucide-table')
-                  .setChecked(boardView === 'table')
-                  .onClick(() => kanbanView.setView('table'))
-              )
-              .addItem((item) =>
-                item
-                  .setTitle(t('View as list'))
-                  .setSection('pane')
-                  .setIcon('lucide-server')
-                  .setChecked(boardView === 'list')
-                  .onClick(() => kanbanView.setView('list'))
-              )
-              .addItem((item) =>
-                item
-                  .setTitle(t('Open board settings'))
-                  .setSection('pane')
-                  .setIcon('lucide-settings')
-                  .onClick(() => kanbanView.getBoardSettings())
-              );
-          }
         }
       })
     );

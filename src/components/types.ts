@@ -77,6 +77,12 @@ export interface ItemMetadata {
   inlineMetadata?: InlineField[];
 }
 
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  checked: boolean;
+}
+
 export interface ItemData {
   blockId?: string;
   checked: boolean;
@@ -87,6 +93,9 @@ export interface ItemData {
   titleSearchRaw: string;
   metadata: ItemMetadata;
   forceEditMode?: boolean;
+  // v2 additions
+  notes?: string;
+  checklistItems?: ChecklistItem[];
 }
 
 export interface ErrorReport {
@@ -99,6 +108,11 @@ export interface BoardData {
   settings: KanbanSettings;
   frontmatter: Record<string, number | string | Array<number | string>>;
   archive: Item[];
+  done: Item[];
+  delegated: Item[];
+  recurring: Item[];
+  proposals: Item[];
+  waiting: Item[];
   errors: ErrorReport[];
 }
 

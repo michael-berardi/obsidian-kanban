@@ -84,30 +84,13 @@ export function useItemMenu({
                 });
               });
           })
-          // Mark as Complete (move to Done hidden lane)
+          // Mark as Complete (move to Done hidden lane + sync to Tabula)
           .addItem((i) => {
             i.setIcon('lucide-check-circle')
               .setTitle('Mark Complete')
               .onClick(() => {
-                stateManager.setState((board) => {
-                  const done = board.data.done || [];
-                  return {
-                    ...board,
-                    data: {
-                      ...board.data,
-                      done: [...done, item],
-                    },
-                    children: board.children.map((lane, laneIdx) => {
-                      if (laneIdx === path[0]) {
-                        return {
-                          ...lane,
-                          children: lane.children.filter((_, itemIdx) => itemIdx !== path[1]),
-                        };
-                      }
-                      return lane;
-                    }),
-                  };
-                });
+                // v5.0 Tabula Integration: Use markTaskComplete for invoice sync
+                stateManager.markTaskComplete(item, path[0], path[1]);
               });
           })
           .addSeparator()
@@ -198,37 +181,13 @@ export function useItemMenu({
 
       menu.addSeparator();
 
-      // 2. Mark Complete
+      // 2. Mark Complete (v5.0 Tabula Integration)
       menu.addItem((i) => {
         i.setIcon('lucide-check-circle')
           .setTitle('Mark Complete')
           .onClick(() => {
-            stateManager.setState((board) => {
-              const done = board.data.done || [];
-              const completedItem = update(item, {
-                data: {
-                  checked: { $set: true },
-                  checkChar: { $set: 'x' },
-                },
-              });
-
-              return {
-                ...board,
-                data: {
-                  ...board.data,
-                  done: [...done, completedItem],
-                },
-                children: board.children.map((lane, laneIdx) => {
-                  if (laneIdx === path[0]) {
-                    return {
-                      ...lane,
-                      children: lane.children.filter((_, itemIdx) => itemIdx !== path[1]),
-                    };
-                  }
-                  return lane;
-                }),
-              };
-            });
+            // v5.0 Tabula Integration: Use markTaskComplete for invoice sync
+            stateManager.markTaskComplete(item, path[0], path[1]);
           });
       })
         // 3. Delegate

@@ -15,6 +15,7 @@ import { DndScope } from '../dnd/components/Scope';
 import { getBoardModifiers } from '../helpers/boardModifiers';
 import { frontmatterKey } from '../parsers/common';
 import { SidePane, SidePaneMode } from './SidePane';
+import { ViewSwitcher, getActiveViewFromPath } from './ViewSwitcher';
 import { Icon } from './Icon/Icon';
 import { Lanes } from './Lane/Lane';
 import { LaneForm } from './Lane/LaneForm';
@@ -63,6 +64,7 @@ export const Kanban = ({ view, stateManager }: KanbanProps) => {
   );
 
   const filePath = stateManager.file.path;
+  const activePortusView = getActiveViewFromPath(filePath);
   const maxArchiveLength = stateManager.useSetting('max-archive-size');
   const dateColors = stateManager.useSetting('date-colors');
   const tagColors = stateManager.useSetting('tag-colors');
@@ -257,6 +259,7 @@ export const Kanban = ({ view, stateManager }: KanbanProps) => {
             ])}
             {...html5DragHandlers}
           >
+            {activePortusView && <ViewSwitcher activeView={activePortusView} />}
             {(isLaneFormVisible || boardData.children.length === 0) && (
               <LaneForm onNewLane={onNewLane} closeLaneForm={closeLaneForm} />
             )}

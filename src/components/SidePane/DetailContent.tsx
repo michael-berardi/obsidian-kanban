@@ -10,9 +10,30 @@ export interface DetailContentProps {
 
 type Priority = 'standard' | 'high' | 'low';
 
+// v5.0 Client field types
+type ClientCode = 'PEP' | 'JPA-44D' | 'JPA-53W' | 'SHO' | 'ROC' | 'LMH' | 'TRB';
+
+interface ClientOption {
+    code: ClientCode;
+    label: string;
+    keywords: string[];
+}
+
+// Client options for routing (order matters - first match wins)
+const CLIENT_OPTIONS: ClientOption[] = [
+    { code: 'JPA-44D', label: 'JP Associates (Decatur)', keywords: ['decatur', '44 decatur', '46 decatur', '44-46 decatur'] },
+    { code: 'JPA-53W', label: 'JP Associates (53 Wooster)', keywords: ['53 wooster'] },
+    { code: 'SHO', label: 'SoHoJohnny LLC', keywords: ['soho johnny', 'sohojohnny', 'soho records', 'sohorecords'] },
+    { code: 'ROC', label: 'Rock NYC', keywords: ['rock nyc', 'rock new york'] },
+    { code: 'LMH', label: 'Let Me Help Inc.', keywords: ['let me help'] },
+    { code: 'TRB', label: 'Tribeca Records', keywords: ['tribeca records', 'tribeca'] },
+    { code: 'PEP', label: 'PEP Real Estate', keywords: [] }, // Default fallback
+];
+
 // Regex patterns for inline fields
 const PRIORITY_REGEX = /\[priority::(standard|high|low)\]/gi;
 const NOTES_REGEX = /\[notes::([^\]]*)\]/gi;
+const CLIENT_REGEX = /\[client::([^\]]+)\]/gi;
 const ARCHIVE_DATE_REGEX = /@\{(\d{4}-\d{2}-\d{2})\}/;
 
 // Extract priority from titleRaw
@@ -37,6 +58,36 @@ function getNotesFromTitle(titleRaw: string): string {
     return '';
 }
 
+// Extract explicit client from titleRaw
+function getClientFromTitle(titleRaw: string): ClientCode | null {
+    const match = titleRaw.match(/\[client::([^\]]+)\]/i);
+    if (match && match[1]) {
+        const code = match[1].toUpperCase() as ClientCode;
+        if (CLIENT_OPTIONS.some(c => c.code === code)) {
+            return code;
+        }
+    }
+    return null;
+}
+
+// Auto-detect client from task content keywords
+function autoDetectClient(titleRaw: string): ClientCode {
+    const content = titleRaw.toLowerCase();
+    for (const option of CLIENT_OPTIONS) {
+        for (const keyword of option.keywords) {
+            if (content.includes(keyword)) {
+                return option.code;
+            }
+        }
+    }
+    return 'PEP'; // Default
+}
+
+// Get effective client (explicit > auto-detect)
+function getEffectiveClient(titleRaw: string): ClientCode {
+    return getClientFromTitle(titleRaw) || autoDetectClient(titleRaw);
+}
+
 // Update priority in titleRaw
 function updatePriorityInTitle(titleRaw: string, newPriority: Priority): string {
     const cleaned = titleRaw.replace(PRIORITY_REGEX, '').trim();
@@ -54,6 +105,17 @@ function updateNotesInTitle(titleRaw: string, notes: string): string {
     }
     const encoded = encodeURIComponent(notes);
     return `${cleaned} [notes::${encoded}]`;
+}
+
+// Update client in titleRaw
+function updateClientInTitle(titleRaw: string, client: ClientCode): string {
+    const cleaned = titleRaw.replace(CLIENT_REGEX, '').trim();
+    // Only add explicit tag if not PEP (default) or if overriding auto-detect
+    const autoDetected = autoDetectClient(titleRaw);
+    if (client === autoDetected) {
+        return cleaned; // No need to add explicit tag if matches auto-detect
+    }
+    return `${cleaned} [client::${client}]`;
 }
 
 export function DetailContent({ onClose }: DetailContentProps) {
@@ -169,6 +231,18 @@ export function DetailContent({ onClose }: DetailContentProps) {
         return getNotesFromTitle(item.data.titleRaw || '');
     }, [item?.data.titleRaw]);
 
+    // v5.0: Get client from titleRaw (explicit or auto-detected)
+    const client: ClientCode = useMemo(() => {
+        if (!item) return 'PEP';
+        return getEffectiveClient(item.data.titleRaw || '');
+    }, [item?.data.titleRaw]);
+
+    // v5.0: Is client explicitly set (vs auto-detected)?
+    const isClientExplicit: boolean = useMemo(() => {
+        if (!item) return false;
+        return getClientFromTitle(item.data.titleRaw || '') !== null;
+    }, [item?.data.titleRaw]);
+
     if (!item) return null;
 
     // Find which lane this item is in
@@ -253,6 +327,21 @@ export function DetailContent({ onClose }: DetailContentProps) {
         const currentPriority = getPriorityFromTitle(item.data.titleRaw || '');
         let newTitleRaw = updatePriorityInTitle(displayTitle, currentPriority);
         newTitleRaw = updateNotesInTitle(newTitleRaw, newNotes);
+        // Preserve client if explicitly set
+        const explicitClient = getClientFromTitle(item.data.titleRaw || '');
+        if (explicitClient) {
+            newTitleRaw = updateClientInTitle(newTitleRaw, explicitClient);
+        }
+        updateContent(newTitleRaw);
+    };
+
+    // v5.0: Update client field
+    const updateClient = (newClient: ClientCode) => {
+        const currentPriority = getPriorityFromTitle(item.data.titleRaw || '');
+        const currentNotes = getNotesFromTitle(item.data.titleRaw || '');
+        let newTitleRaw = updatePriorityInTitle(displayTitle, currentPriority);
+        newTitleRaw = updateNotesInTitle(newTitleRaw, currentNotes);
+        newTitleRaw = updateClientInTitle(newTitleRaw, newClient);
         updateContent(newTitleRaw);
     };
 
@@ -320,10 +409,30 @@ export function DetailContent({ onClose }: DetailContentProps) {
 
                                     // Special handlers for virtual lanes
                                     if (['archive', 'done', 'delegated', 'recurring', 'proposals', 'waiting'].includes(targetId)) {
-                                        // TODO: Implement move to virtual lane logic via stateManager or direct manipulation
-                                        // For now, this requires a more complex move operation than just swapping arrays
-                                        // We will implement a basic move by removing from source and adding to target
                                         console.log('Moving to virtual lane:', targetId);
+
+                                        // v5.0 Tabula Integration: Sync to invoice when moving to Done
+                                        if (targetId === 'done') {
+                                            // Find source location and use markTaskComplete for proper sync
+                                            const laneIndex = board.children.findIndex((lane: Lane) =>
+                                                lane.children.some((child: Item) => child.id === item.id)
+                                            );
+                                            if (laneIndex !== -1) {
+                                                const itemIndex = board.children[laneIndex].children.findIndex((child: Item) => child.id === item.id);
+                                                stateManager.markTaskComplete(item, laneIndex, itemIndex);
+                                                return;
+                                            }
+                                            // If from virtual lane (delegated/recurring/etc), use markTaskCompleteFromVirtual
+                                            const virtualSources = ['delegated', 'recurring', 'proposals', 'waiting'] as const;
+                                            for (const source of virtualSources) {
+                                                const list = board.data[source] || [];
+                                                const idx = list.findIndex((i: Item) => i.id === item.id);
+                                                if (idx !== -1) {
+                                                    stateManager.markTaskCompleteFromVirtual(item, source, idx);
+                                                    return;
+                                                }
+                                            }
+                                        }
 
                                         // Helper to remove item from any location
                                         const removeItem = (b: Board, itemId: string): Board => {
@@ -443,6 +552,22 @@ export function DetailContent({ onClose }: DetailContentProps) {
                             <option value="standard">Standard</option>
                             <option value="high">High</option>
                             <option value="low">Low</option>
+                        </select>
+                    </div>
+                    <div className={c('pane-field')}>
+                        <div className={c('pane-label')}>
+                            Client {isClientExplicit ? '' : '(auto)'}
+                        </div>
+                        <select
+                            className={c('pane-client-select')}
+                            value={client}
+                            onChange={(e) => updateClient((e.target as HTMLSelectElement).value as ClientCode)}
+                        >
+                            {CLIENT_OPTIONS.map((opt) => (
+                                <option key={opt.code} value={opt.code}>
+                                    {opt.label}
+                                </option>
+                            ))}
                         </select>
                     </div>
                 </div>

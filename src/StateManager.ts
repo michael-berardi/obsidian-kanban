@@ -1,9 +1,10 @@
 import update from 'immutability-helper';
-import { App, TFile, moment } from 'obsidian';
+import { App, Notice, TFile, moment } from 'obsidian';
 import { useEffect, useState } from 'preact/compat';
 
 import { KanbanView } from './KanbanView';
 import { KanbanSettings, SettingRetrievers } from './Settings';
+import { TabulaBridge } from './TabulaBridge';
 import { getDefaultDateFormat, getDefaultTimeFormat } from './components/helpers';
 import { Board, BoardTemplate, Item } from './components/types';
 import { ListFormat } from './parsers/List';
@@ -26,6 +27,9 @@ export class StateManager {
   file: TFile;
 
   parser: BaseFormat;
+
+  // v5.0 Tabula Integration
+  tabulaBridge: TabulaBridge;
 
   // v2 Selection state
   selectedItemId: string | null = null;
@@ -59,6 +63,7 @@ export class StateManager {
     this.onEmpty = onEmpty;
     this.getGlobalSettings = getGlobalSettings;
     this.parser = new ListFormat(this);
+    this.tabulaBridge = new TabulaBridge(this.app);
 
     this.registerView(initialView, initialData, true);
   }
@@ -426,6 +431,18 @@ export class StateManager {
     });
 
     try {
+      // v5.0 Tabula Integration: Sync completed items to invoices BEFORE archiving
+      // This ensures tasks are captured even if archiving fails
+      for (const item of archived) {
+        try {
+          await this.tabulaBridge.syncTaskToInvoice(item);
+        } catch (syncError) {
+          // Log error but don't block archiving - data is preserved in transaction log
+          console.error('[Portus→Tabula] Sync failed for item:', item.data.titleRaw, syncError);
+          new Notice(`⚠️ Invoice sync failed: ${(item.data.titleRaw || '').slice(0, 40)}...`, 8000);
+        }
+      }
+
       this.setState(
         update(board, {
           children: {
@@ -443,6 +460,87 @@ export class StateManager {
     } catch (e) {
       this.setError(e);
     }
+  }
+
+  /**
+   * v5.0 Tabula Integration: Mark a single task as complete and sync to invoice.
+   * This is the preferred API for marking tasks done, as it ensures invoice sync.
+   */
+  async markTaskComplete(item: Item, sourceLaneIndex: number, sourceItemIndex: number): Promise<void> {
+    // 1. Sync to Tabula FIRST (before state change, to capture data)
+    try {
+      await this.tabulaBridge.syncTaskToInvoice(item);
+    } catch (syncError) {
+      // Log error but don't block task completion - transaction log preserves data
+      console.error('[Portus→Tabula] Sync failed for item:', item.data.titleRaw, syncError);
+      new Notice(`⚠️ Invoice sync failed: ${(item.data.titleRaw || '').slice(0, 40)}...`, 8000);
+    }
+
+    // 2. Move item to Done section
+    const completedItem = update(item, {
+      data: {
+        checked: { $set: true },
+        checkChar: { $set: 'x' },
+      },
+    });
+
+    this.setState((board) => {
+      const done = board.data.done || [];
+      return {
+        ...board,
+        data: {
+          ...board.data,
+          done: [...done, completedItem],
+        },
+        children: board.children.map((lane, laneIdx) => {
+          if (laneIdx === sourceLaneIndex) {
+            return {
+              ...lane,
+              children: lane.children.filter((_, itemIdx) => itemIdx !== sourceItemIndex),
+            };
+          }
+          return lane;
+        }),
+      };
+    });
+  }
+
+  /**
+   * v5.0 Tabula Integration: Mark a task complete from a virtual pane (Delegated, etc).
+   */
+  async markTaskCompleteFromVirtual(
+    item: Item,
+    sourceListName: 'delegated' | 'recurring' | 'proposals' | 'waiting',
+    sourceItemIndex: number
+  ): Promise<void> {
+    // 1. Sync to Tabula FIRST
+    try {
+      await this.tabulaBridge.syncTaskToInvoice(item);
+    } catch (syncError) {
+      console.error('[Portus→Tabula] Sync failed for item:', item.data.titleRaw, syncError);
+      new Notice(`⚠️ Invoice sync failed: ${(item.data.titleRaw || '').slice(0, 40)}...`, 8000);
+    }
+
+    // 2. Move item to Done section
+    const completedItem = update(item, {
+      data: {
+        checked: { $set: true },
+        checkChar: { $set: 'x' },
+      },
+    });
+
+    this.setState((board) => {
+      const done = board.data.done || [];
+      const sourceList = board.data[sourceListName] || [];
+      return {
+        ...board,
+        data: {
+          ...board.data,
+          done: [...done, completedItem],
+          [sourceListName]: sourceList.filter((_, idx) => idx !== sourceItemIndex),
+        },
+      };
+    });
   }
 
   getNewItem(content: string, checkChar: string, forceEdit?: boolean) {

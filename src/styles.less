@@ -28,13 +28,14 @@
   display: none !important;
 }
 
-/* Hide lane collapse toggle (except To-Do which is first lane) */
+/* Hide lane collapse toggle (except To-Do and In Progress) */
 .kanban-plugin__lane-collapse {
   display: none !important;
 }
 
-/* Show collapse toggle for To-Do lane only (first lane) */
-.kanban-plugin__lane-wrapper:nth-child(1) .kanban-plugin__lane-collapse {
+/* Show collapse toggle for To-Do (1st) and In Progress (2nd) lanes */
+.kanban-plugin__lane-wrapper:nth-child(1) .kanban-plugin__lane-collapse,
+.kanban-plugin__lane-wrapper:nth-child(2) .kanban-plugin__lane-collapse {
   display: flex !important;
   cursor: pointer;
   opacity: 0.4;
